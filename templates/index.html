@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>EAGLE — OSINT & Geolocation Framework</title>
+  <title>EAGLE — OSINT & Intelligence Framework</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -19,22 +19,22 @@
     </div>
     <div class="status">
       <span class="dot"></span>
-      <span>SYSTEM ACTIVE</span>
+      <span id="system-status">SYSTEM READY</span>
     </div>
   </header>
 
   <main>
     <section class="hero">
-      <div class="hero-tag">Passive Reconnaissance & Geolocation</div>
+      <div class="hero-tag">Passive Reconnaissance & Intelligence Engine</div>
       <h1>Investiguer une cible.</h1>
-      <p class="sub">Personne · Email · Pseudo · Téléphone · Domaine · BSSID — cartographie interactive et multi-sources.</p>
+      <p class="sub">Personne · Pseudo · Email · Téléphone · Domaine · BSSID — cartographie géospatiale et multi-sources unifiées.</p>
 
       <form id="search-form" class="search">
         <select id="type" aria-label="Type de recherche">
           <option value="auto">AUTO</option>
           <option value="person">PERSONNE</option>
-          <option value="email">EMAIL</option>
           <option value="username">USERNAME</option>
+          <option value="email">EMAIL</option>
           <option value="phone">TÉLÉPHONE</option>
           <option value="domain">DOMAINE</option>
           <option value="bssid">BSSID</option>
@@ -60,30 +60,66 @@
       </div>
     </section>
 
+    <!-- Scan progress information -->
     <section id="run-info" class="run-info hidden">
       <div class="run-meta">
         <div class="meta-item"><span class="k">CIBLE</span> <span id="run-target" class="v"></span></div>
         <div class="meta-item"><span class="k">TYPE</span> <span id="run-type" class="v"></span></div>
-        <div class="meta-item"><span class="k">SOURCES</span> <span id="run-count" class="v"></span></div>
-        <div class="meta-item"><span class="k">COMPLÉTÉ</span> <span id="run-done" class="v">0</span></div>
+        <div class="meta-item"><span class="k">MODULES</span> <span id="run-count" class="v"></span></div>
+        <div class="meta-item"><span class="k">STATUT</span> <span id="run-done" class="v">Analyse en cours...</span></div>
       </div>
       <div class="progress"><div class="progress-bar" id="progress-bar"></div></div>
     </section>
 
-    <section id="map-section" class="map-section hidden">
-      <div class="map-head">
-        <div class="map-title">
-          <span class="map-icon">◈</span>
-          <span>Carte de Géolocalisation des Résultats</span>
+    <!-- 1. Carte de Géolocalisation (Hidden until coordinates found) -->
+    <section id="map-section" class="intel-section hidden">
+      <div class="section-head">
+        <div class="section-title">
+          <span class="section-icon">◈</span>
+          <span>GÉOLOCALISATION & COORDONNÉES</span>
         </div>
-        <div class="map-meta">
-          <span id="map-count" class="map-badge">0 localisation</span>
+        <div class="section-meta">
+          <span id="map-count" class="badge badge-accent">0 coordonnée</span>
         </div>
       </div>
       <div id="map"></div>
     </section>
 
-    <section id="results" class="results"></section>
+    <!-- 2. Réseaux Sociaux & Profils (Dedicated Fixed-Size Grid) -->
+    <section id="social-section" class="intel-section hidden">
+      <div class="section-head">
+        <div class="section-title">
+          <span class="section-icon">◈</span>
+          <span>RÉSEAUX SOCIAUX & PROFILS EN LIGNE</span>
+        </div>
+        <div class="section-meta">
+          <span id="social-found-count" class="badge badge-success">0 profil détecté</span>
+          <span id="social-total-count" class="badge badge-muted">0 testé</span>
+        </div>
+      </div>
+      <div id="social-grid" class="social-grid">
+        <!-- Injected fixed-size cards with green check ✓ or red cross ✕ -->
+      </div>
+    </section>
+
+    <!-- 3. Résultats Web & Mentions (Global Unified Deduplicated Web Index) -->
+    <section id="web-section" class="intel-section hidden">
+      <div class="section-head">
+        <div class="section-title">
+          <span class="section-icon">◈</span>
+          <span>RÉSULTATS WEB & INDEX GLOBAL</span>
+        </div>
+        <div class="section-meta">
+          <span id="web-count" class="badge badge-accent">0 résultat unique</span>
+        </div>
+      </div>
+      <div id="web-grid" class="findings-grid">
+        <!-- Injected deduplicated web findings without search engine labels -->
+      </div>
+    </section>
+
+    <!-- 4. Renseignement Spécifique par Domaine (Annuaires, Téléphonie, Domaines, Fuites, Archives) -->
+    <section id="other-sections" class="other-sections"></section>
   </main>
 
   <footer>

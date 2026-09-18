@@ -9,12 +9,19 @@ from .base import Finding, Result, Source
 class GitHubUsernameSource(Source):
     name = "github"
     description = "Vérifie l'existence d'un profil GitHub (scraping)."
-    input_types = ("username",)
+    input_types = ("username", "person")
 
     async def lookup(self, target: str, client: httpx.AsyncClient) -> Result:
         start = time.monotonic()
         result = Result(source=self.name, target=target, found=False)
-        url = f"https://github.com/{target}"
+        clean = target.strip()
+        if " " in clean:
+            import re
+            clean = re.sub(r"[^a-zA-Z0-9]", "", clean).lower()
+        if not clean:
+            result.elapsed_ms = int((time.monotonic() - start) * 1000)
+            return result
+        url = f"https://github.com/{clean}"
         try:
             r = await client.get(url)
             if r.status_code == 200:
