@@ -27,17 +27,20 @@ JOBS: dict[str, queue.Queue] = {}
 
 
 @app.route("/")
-@app.route("/index")
-@app.route("/index.html")
-@app.route("/api/index")
-@app.route("/api/index.py")
 def home():
     return render_template("index.html")
 
 
-@app.route("/api/search", methods=["POST"])
+@app.route("/api/search", methods=["GET", "POST"])
 def search():
-    data = request.get_json(force=True) or {}
+    if request.method == "GET":
+        return jsonify({"status": "ready", "version": "0.2"})
+
+    try:
+        data = request.get_json(force=True) or {}
+    except Exception:
+        data = {}
+
     target = (data.get("target") or "").strip()
     requested = data.get("type") or None
     if not target:
@@ -75,9 +78,35 @@ def search():
     )
 
 
-@app.route("/api/stream/<job_id>")
-def stream(job_id):
+@app.route("/api/stream", methods=["GET"])
+@app.route("/api/stream/<job_id>", methods=["GET"])
+def stream(job_id=None):
+    if not job_id:
+        job_id = request.args.get("job_id") or "live"
+
+    target = (request.args.get("target") or "").strip()
+    input_type = request.args.get("type") or None
+
     q = JOBS.get(job_id)
+
+    # Serverless fallback: if queue is missing across serverless instances, run lookup on the fly
+    if not q and target:
+        detected = input_type if input_type and input_type != "auto" else detect_input_type(target)
+        q = queue.Queue()
+
+        def runner():
+            async def on_result(r):
+                q.put(("result", r.to_dict()))
+
+            try:
+                asyncio.run(run_lookup_stream(target, on_result, input_type=detected))
+            except Exception as e:
+                q.put(("error", {"message": str(e)}))
+            finally:
+                q.put(("done", None))
+
+        threading.Thread(target=runner, daemon=True).start()
+
     if not q:
         return jsonify({"error": "unknown job"}), 404
 

@@ -126,7 +126,9 @@ form.addEventListener('submit', async (e) => {
     resultsEl.appendChild(skeletonCard(s.name, s.description));
   }
 
-  const es = new EventSource(`/api/stream/${data.job_id}`);
+  const es = new EventSource(
+    `/api/stream/${encodeURIComponent(data.job_id)}?target=${encodeURIComponent(target)}&type=${encodeURIComponent(data.input_type)}`
+  );
   currentEs = es;
 
   es.addEventListener('result', (ev) => {

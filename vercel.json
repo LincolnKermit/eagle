@@ -1,17 +1,13 @@
 {
   "functions": {
-    "api/index.py": {
+    "api/*.py": {
       "includeFiles": "templates/**,static/**,public/**,osint/**"
     }
   },
   "rewrites": [
     {
-      "source": "/static/(.*)",
-      "destination": "/static/$1"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/api/index.py?__path__=/$1"
+      "source": "/api/stream/(.*)",
+      "destination": "/api/stream?job_id=$1"
     }
   ]
 }
