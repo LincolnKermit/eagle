@@ -11,7 +11,7 @@
     },
     {
       "source": "/(.*)",
-      "destination": "/api/index.py"
+      "destination": "/api/index.py?__path__=/$1"
     }
   ]
 }

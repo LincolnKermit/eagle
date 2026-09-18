@@ -100,7 +100,12 @@ form.addEventListener('submit', async (e) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    data = await r.json();
+    const text = await r.text();
+    try {
+      data = JSON.parse(text);
+    } catch (parseErr) {
+      throw new Error(`Server returned non-JSON response (${r.status}): ${text.slice(0, 120)}`);
+    }
     if (!r.ok) throw new Error(data.error || 'request failed');
   } catch (err) {
     resultsEl.innerHTML = `<div class="error-msg">[FATAL] ${escapeHtml(err.message)}</div>`;
