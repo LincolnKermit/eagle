@@ -230,6 +230,32 @@ function detectSocialNetworkFromUrl(url) {
   return null;
 }
 
+// Verify that a detected social URL genuinely corresponds to the searched target
+function isSocialUrlForTarget(url, target) {
+  if (!url || !target) return false;
+  const cleanTarget = target.trim().toLowerCase();
+  const slug = cleanTarget.replace(/[^a-z0-9]/g, '');
+  const tokens = cleanTarget.replace(/[^a-z0-9]/g, ' ').split(/\s+/).filter(t => t.length > 1);
+  const urlLower = url.toLowerCase();
+  
+  // Non-profile paths to ignore
+  const ignoredPatterns = [
+    'instagram.com/p/', 'instagram.com/reels/', 'instagram.com/explore/', 'instagram.com/stories/', 'instagram.com/accounts/',
+    'twitter.com/i/', 'x.com/i/', 'twitter.com/intent/', 'x.com/intent/', 'twitter.com/share', 'x.com/share',
+    'linkedin.com/feed', 'linkedin.com/sharing', 'linkedin.com/pulse', 'linkedin.com/pub/dir',
+    'youtube.com/watch', 'youtube.com/channel/', 'youtube.com/playlist',
+    'pinterest.com/pin/', 'pinterest.com/ideas/',
+    'reddit.com/r/', 't.me/s/', 't.me/joinchat',
+  ];
+  for (const ign of ignoredPatterns) {
+    if (urlLower.includes(ign)) return false;
+  }
+
+  if (slug && urlLower.includes(slug)) return true;
+  if (tokens.length > 0 && tokens.every(t => urlLower.includes(t))) return true;
+  return false;
+}
+
 // -------------------------------------------------------------
 // SOCIAL MEDIA TILE MANAGEMENT (FIXED SIZE TILES WITH ✓ OR ✕)
 // -------------------------------------------------------------
@@ -519,7 +545,7 @@ form.addEventListener('submit', async (e) => {
       for (const f of res.findings) {
         if (f.url) {
           const detectedPlatform = detectSocialNetworkFromUrl(f.url);
-          if (detectedPlatform) {
+          if (detectedPlatform && isSocialUrlForTarget(f.url, target)) {
             updateSocialPlatform(detectedPlatform, f.url, true);
           }
         }

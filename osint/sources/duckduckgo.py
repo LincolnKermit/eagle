@@ -44,12 +44,17 @@ class DuckDuckGoSource(Source):
                         hits = list(ddgs.text(f'"{clean}"', max_results=12))
                     except Exception:
                         hits = []
-                    # 2. Fallback to broad search if exact phrase returned nothing
-                    if not hits:
+                    # 2. Supplement with broad search to discover social profiles and web references
+                    if len(hits) < 15:
                         try:
-                            hits = list(ddgs.text(clean, max_results=20))
+                            broad = list(ddgs.text(clean, max_results=20))
+                            seen_hrefs = {h.get("href") for h in hits if h.get("href")}
+                            for b in broad:
+                                if b.get("href") and b.get("href") not in seen_hrefs:
+                                    hits.append(b)
+                                    seen_hrefs.add(b.get("href"))
                         except Exception:
-                            hits = []
+                            pass
                 return hits
 
             raw_hits = await asyncio.to_thread(_do)

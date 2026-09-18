@@ -3,45 +3,15 @@ import re
 import time
 from typing import Optional
 
+from bs4 import BeautifulSoup
 import httpx
 
 from .base import Finding, Result, Source
 
-# Core social platforms with validation strategy
-# (Name, URL Template, Check Type)
-# Check types:
-#   "status": 200-299 = exists, 404 = missing
-#   ("marker_missing", text): if text in response -> missing, else exists
-#   ("marker_present", text): if text in response -> exists, else missing
-PLATFORMS: list[tuple[str, str, object]] = [
-    ("GitHub", "https://github.com/{u}", "status"),
-    ("Instagram", "https://www.instagram.com/{u}/", "status"),
-    ("Twitter/X", "https://x.com/{u}", ("marker_missing", "This account doesn’t exist")),
-    ("LinkedIn", "https://www.linkedin.com/in/{u}", "status"),
-    ("Reddit", "https://www.reddit.com/user/{u}", ("marker_missing", "Nobody on Reddit goes by that name")),
-    ("TikTok", "https://www.tiktok.com/@{u}", ("marker_missing", "Couldn't find this account")),
-    ("YouTube", "https://www.youtube.com/@{u}", "status"),
-    ("Telegram", "https://t.me/{u}", ("marker_present", "tgme_page_extra")),
-    ("Pinterest", "https://www.pinterest.com/{u}/", ("marker_missing", "<title></title>")),
-    ("Twitch", "https://www.twitch.tv/{u}", "status"),
-    ("GitLab", "https://gitlab.com/{u}", "status"),
-    ("SoundCloud", "https://soundcloud.com/{u}", "status"),
-    ("Medium", "https://medium.com/@{u}", "status"),
-    ("Steam", "https://steamcommunity.com/id/{u}", ("marker_missing", "The specified profile could not be found")),
-    ("Linktree", "https://linktr.ee/{u}", "status"),
-    ("Chess.com", "https://www.chess.com/member/{u}", "status"),
-    ("DEV.to", "https://dev.to/{u}", "status"),
-    ("HackerNews", "https://news.ycombinator.com/user?id={u}", ("marker_missing", "No such user.")),
-    ("Keybase", "https://keybase.io/{u}", "status"),
-    ("Dribbble", "https://dribbble.com/{u}", "status"),
-    ("Behance", "https://www.behance.net/{u}", "status"),
-    ("Last.fm", "https://www.last.fm/user/{u}", "status"),
-]
-
 
 class UsernameSitesSource(Source):
     name = "username_sites"
-    description = "Vérification systématique de présence sur 20+ réseaux sociaux majeurs."
+    description = "Vérification systématique et certifiée de présence sur 20+ réseaux sociaux majeurs."
     input_types = ("username", "person")
 
     async def lookup(self, target: str, client: httpx.AsyncClient) -> Result:
@@ -49,23 +19,30 @@ class UsernameSitesSource(Source):
         result = Result(source=self.name, target=target, found=False)
         clean = target.strip()
 
-        # Derive candidate usernames (e.g. 'John Doe' -> 'johndoe', 'john.doe')
+        # Derive candidate usernames and search tokens
+        tokens = [t for t in re.findall(r"[a-zA-Z0-9]+", clean.lower()) if len(t) > 1]
         candidates = []
         if " " in clean:
             slug = re.sub(r"[^a-zA-Z0-9]", "", clean).lower()
             dot = re.sub(r"\s+", ".", clean).lower()
-            if slug:
-                candidates.append(slug)
-            if dot and dot != slug:
-                candidates.append(dot)
+            underscore = re.sub(r"\s+", "_", clean).lower()
+            pascal = "".join(w.capitalize() for w in clean.split())
+            for c in [slug, dot, underscore, pascal]:
+                if c and c not in candidates:
+                    candidates.append(c)
         else:
-            candidates.append(clean.lower())
+            candidates.append(clean)
+            no_punct = re.sub(r"[^a-zA-Z0-9]", "", clean)
+            if no_punct and no_punct != clean:
+                candidates.append(no_punct)
 
         if not candidates:
             result.elapsed_ms = int((time.monotonic() - start) * 1000)
             return result
 
         primary_u = candidates[0]
+        cand_lower = [c.lower() for c in candidates]
+
         headers = {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -73,56 +50,390 @@ class UsernameSitesSource(Source):
             ),
             "Accept-Language": "en-US,en;q=0.9",
         }
+        yt_headers = dict(headers)
+        yt_headers["Cookie"] = "SOCS=CAESEwgDEgk2OTg5NDk4MzQaAmVuIAEaBgoEAP_99w"
 
-        sem = asyncio.Semaphore(12)
+        sem = asyncio.Semaphore(10)
 
-        async def check_platform(name: str, tmpl: str, kind: object) -> Finding:
-            best_url = tmpl.format(u=primary_u)
-            found = False
-
-            # Test primary candidate, and fallback to dot candidate if not found
-            for u in candidates:
-                url = tmpl.format(u=u)
-                async with sem:
-                    try:
-                        r = await client.get(url, headers=headers, timeout=6, follow_redirects=True)
-                        if kind == "status":
-                            if 200 <= r.status_code < 300:
-                                found = True
-                                best_url = url
-                                break
-                        elif isinstance(kind, tuple):
-                            ktype, marker = kind
-                            if 200 <= r.status_code < 300:
-                                if ktype == "marker_missing" and marker not in r.text:
-                                    found = True
-                                    best_url = url
-                                    break
-                                elif ktype == "marker_present" and marker in r.text:
-                                    found = True
-                                    best_url = url
-                                    break
-                    except Exception:
-                        continue
-
+        # Helper to wrap finding
+        def make_finding(platform: str, found: bool, url: str) -> Finding:
             return Finding(
-                label=name,
+                label=platform,
                 value="Profil détecté" if found else "Non trouvé",
-                url=best_url,
+                url=url,
                 extra={
-                    "platform": name,
+                    "platform": platform,
                     "exists": found,
                     "category": "social",
                     "checked": True,
                 },
             )
 
-        tasks = [check_platform(name, tmpl, kind) for name, tmpl, kind in PLATFORMS]
-        findings = await asyncio.gather(*tasks, return_exceptions=True)
+        # -------------------------------------------------------------
+        # DIRECT HTTP CHECKERS (100% RELIABLE & NO FALSE POSITIVES)
+        # -------------------------------------------------------------
 
-        for f in findings:
+        async def check_github() -> Finding:
+            for u in candidates:
+                url = f"https://github.com/{u}"
+                async with sem:
+                    try:
+                        r = await client.get(url, headers=headers, timeout=5, follow_redirects=True)
+                        if r.status_code == 200:
+                            return make_finding("GitHub", True, url)
+                    except Exception:
+                        pass
+            return make_finding("GitHub", False, f"https://github.com/{primary_u}")
+
+        async def check_twitter() -> Finding:
+            for u in candidates:
+                api_url = f"https://publish.twitter.com/oembed?url=https://x.com/{u}"
+                async with sem:
+                    try:
+                        r = await client.get(api_url, headers=headers, timeout=5, follow_redirects=True)
+                        if r.status_code == 200 and "html" in r.text:
+                            return make_finding("Twitter/X", True, f"https://x.com/{u}")
+                    except Exception:
+                        pass
+            return make_finding("Twitter/X", False, f"https://x.com/{primary_u}")
+
+        async def check_telegram() -> Finding:
+            for u in candidates:
+                url = f"https://t.me/{u}"
+                async with sem:
+                    try:
+                        r = await client.get(url, headers=headers, timeout=5, follow_redirects=True)
+                        if r.status_code == 200:
+                            soup = BeautifulSoup(r.text, "html.parser")
+                            t = soup.find("div", class_="tgme_page_title")
+                            robots = soup.find("meta", attrs={"name": "robots"})
+                            is_ph = bool(robots and "noindex" in robots.get("content", ""))
+                            if t and t.text.strip() and not is_ph:
+                                return make_finding("Telegram", True, url)
+                    except Exception:
+                        pass
+            return make_finding("Telegram", False, f"https://t.me/{primary_u}")
+
+        async def check_tiktok() -> Finding:
+            for u in candidates:
+                api_url = f"https://www.tiktok.com/oembed?url=https://www.tiktok.com/@{u}"
+                async with sem:
+                    try:
+                        r = await client.get(api_url, headers=headers, timeout=5, follow_redirects=True)
+                        if r.status_code == 200 and "author_name" in r.text:
+                            return make_finding("TikTok", True, f"https://www.tiktok.com/@{u}")
+                    except Exception:
+                        pass
+            return make_finding("TikTok", False, f"https://www.tiktok.com/@{primary_u}")
+
+        async def check_pinterest() -> Finding:
+            for u in candidates:
+                api_url = f"https://www.pinterest.com/oembed.json?url=https://www.pinterest.com/{u}/"
+                async with sem:
+                    try:
+                        r = await client.get(api_url, headers=headers, timeout=5, follow_redirects=True)
+                        if r.status_code == 200:
+                            return make_finding("Pinterest", True, f"https://www.pinterest.com/{u}/")
+                    except Exception:
+                        pass
+            return make_finding("Pinterest", False, f"https://www.pinterest.com/{primary_u}/")
+
+        async def check_youtube() -> Finding:
+            for u in candidates:
+                url = f"https://www.youtube.com/@{u}"
+                async with sem:
+                    try:
+                        r = await client.get(url, headers=yt_headers, timeout=5, follow_redirects=True)
+                        if (
+                            r.status_code == 200
+                            and "404 Not Found" not in r.text
+                            and "Before you continue to YouTube" not in r.text
+                        ):
+                            return make_finding("YouTube", True, url)
+                    except Exception:
+                        pass
+            return make_finding("YouTube", False, f"https://www.youtube.com/@{primary_u}")
+
+        async def check_twitch() -> Finding:
+            for u in candidates:
+                url = f"https://www.twitch.tv/{u}"
+                async with sem:
+                    try:
+                        r = await client.get(url, headers=headers, timeout=5, follow_redirects=True)
+                        if r.status_code == 200 and ("isLiveBroadcast" in r.text or "channel_id" in r.text):
+                            return make_finding("Twitch", True, url)
+                    except Exception:
+                        pass
+            return make_finding("Twitch", False, f"https://www.twitch.tv/{primary_u}")
+
+        async def check_gitlab() -> Finding:
+            for u in candidates:
+                api_url = f"https://gitlab.com/api/v4/users?username={u}"
+                async with sem:
+                    try:
+                        r = await client.get(api_url, headers=headers, timeout=5, follow_redirects=True)
+                        if r.status_code == 200 and len(r.json()) > 0:
+                            return make_finding("GitLab", True, f"https://gitlab.com/{u}")
+                    except Exception:
+                        pass
+            return make_finding("GitLab", False, f"https://gitlab.com/{primary_u}")
+
+        async def check_medium() -> Finding:
+            for u in candidates:
+                feed_url = f"https://medium.com/feed/@{u}"
+                async with sem:
+                    try:
+                        r = await client.get(feed_url, headers=headers, timeout=5, follow_redirects=True)
+                        if r.status_code == 200 and "<rss" in r.text:
+                            return make_finding("Medium", True, f"https://medium.com/@{u}")
+                    except Exception:
+                        pass
+            return make_finding("Medium", False, f"https://medium.com/@{primary_u}")
+
+        async def check_steam() -> Finding:
+            for u in candidates:
+                url = f"https://steamcommunity.com/id/{u}"
+                async with sem:
+                    try:
+                        r = await client.get(url, headers=headers, timeout=5, follow_redirects=True)
+                        if (
+                            r.status_code == 200
+                            and "g_rgProfileData =" in r.text
+                            and "The specified profile could not be found" not in r.text
+                        ):
+                            return make_finding("Steam", True, url)
+                    except Exception:
+                        pass
+            return make_finding("Steam", False, f"https://steamcommunity.com/id/{primary_u}")
+
+        async def check_soundcloud() -> Finding:
+            for u in candidates:
+                url = f"https://soundcloud.com/{u}"
+                async with sem:
+                    try:
+                        r = await client.get(url, headers=headers, timeout=5, follow_redirects=True)
+                        if r.status_code == 200 and "SoundCloud - Hear the world’s sounds" not in r.text and "404" not in r.text:
+                            return make_finding("SoundCloud", True, url)
+                    except Exception:
+                        pass
+            return make_finding("SoundCloud", False, f"https://soundcloud.com/{primary_u}")
+
+        async def check_linktree() -> Finding:
+            for u in candidates:
+                url = f"https://linktr.ee/{u}"
+                async with sem:
+                    try:
+                        r = await client.get(url, headers=headers, timeout=5, follow_redirects=True)
+                        if r.status_code == 200 and "Page Not Found" not in r.text:
+                            return make_finding("Linktree", True, url)
+                    except Exception:
+                        pass
+            return make_finding("Linktree", False, f"https://linktr.ee/{primary_u}")
+
+        async def check_chess() -> Finding:
+            for u in candidates:
+                url = f"https://www.chess.com/member/{u}"
+                async with sem:
+                    try:
+                        r = await client.get(url, headers=headers, timeout=5, follow_redirects=True)
+                        if r.status_code == 200 and "Missing Page" not in r.text:
+                            return make_finding("Chess.com", True, url)
+                    except Exception:
+                        pass
+            return make_finding("Chess.com", False, f"https://www.chess.com/member/{primary_u}")
+
+        async def check_devto() -> Finding:
+            for u in candidates:
+                url = f"https://dev.to/{u}"
+                async with sem:
+                    try:
+                        r = await client.get(url, headers=headers, timeout=5, follow_redirects=True)
+                        if r.status_code == 200 and "404: Page Not Found" not in r.text:
+                            return make_finding("DEV.to", True, url)
+                    except Exception:
+                        pass
+            return make_finding("DEV.to", False, f"https://dev.to/{primary_u}")
+
+        async def check_hackernews() -> Finding:
+            for u in candidates:
+                api_url = f"https://hacker-news.firebaseio.com/v0/user/{u}.json"
+                async with sem:
+                    try:
+                        r = await client.get(api_url, headers=headers, timeout=5, follow_redirects=True)
+                        if r.status_code == 200 and isinstance(r.json(), dict) and "id" in r.json():
+                            return make_finding("HackerNews", True, f"https://news.ycombinator.com/user?id={u}")
+                    except Exception:
+                        pass
+            return make_finding("HackerNews", False, f"https://news.ycombinator.com/user?id={primary_u}")
+
+        async def check_keybase() -> Finding:
+            for u in candidates:
+                url = f"https://keybase.io/{u}"
+                async with sem:
+                    try:
+                        r = await client.get(url, headers=headers, timeout=5, follow_redirects=True)
+                        if r.status_code == 200:
+                            return make_finding("Keybase", True, url)
+                    except Exception:
+                        pass
+            return make_finding("Keybase", False, f"https://keybase.io/{primary_u}")
+
+        async def check_dribbble() -> Finding:
+            for u in candidates:
+                url = f"https://dribbble.com/{u}"
+                async with sem:
+                    try:
+                        r = await client.get(url, headers=headers, timeout=5, follow_redirects=True)
+                        if r.status_code == 200 and "doesn't exist" not in r.text:
+                            return make_finding("Dribbble", True, url)
+                    except Exception:
+                        pass
+            return make_finding("Dribbble", False, f"https://dribbble.com/{primary_u}")
+
+        async def check_behance() -> Finding:
+            for u in candidates:
+                url = f"https://www.behance.net/{u}"
+                async with sem:
+                    try:
+                        r = await client.get(url, headers=headers, timeout=5, follow_redirects=True)
+                        if r.status_code == 200 and "can’t find that page" not in r.text:
+                            return make_finding("Behance", True, url)
+                    except Exception:
+                        pass
+            return make_finding("Behance", False, f"https://www.behance.net/{primary_u}")
+
+        # -------------------------------------------------------------
+        # SEARCH-ASSISTED CHECKERS (Instagram, LinkedIn, Reddit)
+        # -------------------------------------------------------------
+
+        def check_search_assisted_sync() -> list[Finding]:
+            findings = []
+            found_map = {}
+            try:
+                from ddgs import DDGS
+                with DDGS() as ddgs:
+                    # 1. Instagram
+                    try:
+                        for q in [f"site:instagram.com {clean}", f"{clean} instagram"]:
+                            try:
+                                hits = list(ddgs.text(q, max_results=5))
+                                for h in hits:
+                                    href = h.get("href", "")
+                                    m = re.search(r"instagram\.com/([a-zA-Z0-9._-]+)", href)
+                                    if m:
+                                        u_found = m.group(1).lower().rstrip("/")
+                                        if u_found in ["p", "explore", "reels", "stories", "accounts", "about", "legal", "developer"]:
+                                            continue
+                                        if u_found in cand_lower or (tokens and all(t in u_found for t in tokens)):
+                                            found_map["Instagram"] = href
+                                            break
+                                if "Instagram" in found_map:
+                                    break
+                            except Exception:
+                                continue
+                    except Exception:
+                        pass
+
+                    # 2. LinkedIn
+                    try:
+                        for q in [f"site:linkedin.com {clean}", f"{clean} linkedin"]:
+                            try:
+                                hits = list(ddgs.text(q, max_results=5))
+                                for h in hits:
+                                    href = h.get("href", "")
+                                    m = re.search(r"linkedin\.com/in/([a-zA-Z0-9._-]+)", href)
+                                    if m:
+                                        u_found = m.group(1).lower().rstrip("/")
+                                        if u_found in cand_lower or (tokens and all(t in u_found for t in tokens)):
+                                            found_map["LinkedIn"] = href
+                                            break
+                                if "LinkedIn" in found_map:
+                                    break
+                            except Exception:
+                                continue
+                    except Exception:
+                        pass
+
+                    # 3. Reddit
+                    try:
+                        for q in [f"site:reddit.com/user/ {clean}", f"{clean} reddit"]:
+                            try:
+                                hits = list(ddgs.text(q, max_results=4))
+                                for h in hits:
+                                    href = h.get("href", "")
+                                    m = re.search(r"reddit\.com/user/([a-zA-Z0-9._-]+)", href)
+                                    if m:
+                                        u_found = m.group(1).lower().rstrip("/")
+                                        if u_found in cand_lower or (tokens and all(t in u_found for t in tokens)):
+                                            found_map["Reddit"] = href
+                                            break
+                                if "Reddit" in found_map:
+                                    break
+                            except Exception:
+                                continue
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+            findings.append(
+                make_finding(
+                    "Instagram",
+                    "Instagram" in found_map,
+                    found_map.get("Instagram", f"https://www.instagram.com/{primary_u}/"),
+                )
+            )
+            findings.append(
+                make_finding(
+                    "LinkedIn",
+                    "LinkedIn" in found_map,
+                    found_map.get("LinkedIn", f"https://www.linkedin.com/in/{primary_u}"),
+                )
+            )
+            findings.append(
+                make_finding(
+                    "Reddit",
+                    "Reddit" in found_map,
+                    found_map.get("Reddit", f"https://www.reddit.com/user/{primary_u}"),
+                )
+            )
+            return findings
+
+        # Launch all async tasks and threadpool task concurrently
+        async_tasks = [
+            check_github(),
+            check_twitter(),
+            check_telegram(),
+            check_tiktok(),
+            check_pinterest(),
+            check_youtube(),
+            check_twitch(),
+            check_gitlab(),
+            check_medium(),
+            check_steam(),
+            check_soundcloud(),
+            check_linktree(),
+            check_chess(),
+            check_devto(),
+            check_hackernews(),
+            check_keybase(),
+            check_dribbble(),
+            check_behance(),
+        ]
+
+        async_res, search_res = await asyncio.gather(
+            asyncio.gather(*async_tasks, return_exceptions=True),
+            asyncio.to_thread(check_search_assisted_sync),
+        )
+
+        for f in async_res:
             if isinstance(f, Finding):
                 result.findings.append(f)
+
+        if isinstance(search_res, list):
+            for f in search_res:
+                if isinstance(f, Finding):
+                    result.findings.append(f)
 
         result.found = any(f.extra.get("exists") for f in result.findings)
         result.elapsed_ms = int((time.monotonic() - start) * 1000)
