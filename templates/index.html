@@ -3,66 +3,69 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>EAGLE — OSINT Framework</title>
+  <title>EAGLE — OSINT & Geolocation Framework</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-  <div class="grid-bg"></div>
-  <div class="scanlines"></div>
-  <div class="glow glow-1"></div>
-  <div class="glow glow-2"></div>
-
   <header class="topbar">
     <div class="logo">
-      <span class="logo-mark">◆</span>
+      <span class="logo-mark">◈</span>
       <span class="logo-name">EAGLE</span>
-      <span class="logo-tag">// OSINT FRAMEWORK</span>
+      <span class="logo-tag">OSINT RECON</span>
     </div>
     <div class="status">
       <span class="dot"></span>
-      <span>SYSTEM READY</span>
+      <span>SYSTEM ACTIVE</span>
     </div>
   </header>
 
   <main>
     <section class="hero">
-      <div class="hero-tag">v0.2 · multi-source passive recon & geoint</div>
-      <h1>Scan a target.</h1>
-      <p class="sub">Person · Email · Username · Phone · Domain · BSSID — multi-engine intelligence & geolocation.</p>
+      <div class="hero-tag">Passive Reconnaissance & Geolocation</div>
+      <h1>Investiguer une cible.</h1>
+      <p class="sub">Personne · Email · Pseudo · Téléphone · Domaine · BSSID — cartographie interactive et multi-sources.</p>
 
       <form id="search-form" class="search">
-        <select id="type" aria-label="input type">
+        <select id="type" aria-label="Type de recherche">
           <option value="auto">AUTO</option>
-          <option value="person">PERSON / NAME</option>
+          <option value="person">PERSONNE</option>
           <option value="email">EMAIL</option>
           <option value="username">USERNAME</option>
-          <option value="phone">PHONE</option>
-          <option value="domain">DOMAIN</option>
+          <option value="phone">TÉLÉPHONE</option>
+          <option value="domain">DOMAINE</option>
           <option value="bssid">BSSID</option>
         </select>
-        <input id="target" type="text" placeholder="target..." autocomplete="off" autofocus spellcheck="false" />
+        <input id="target" type="text" placeholder="Entrez un nom, email, pseudo, téléphone..." autocomplete="off" autofocus spellcheck="false" />
         <button type="submit">
-          <span>RUN</span>
-          <span class="arrow">▸</span>
+          <span>Scanner</span>
+          <span class="arrow">→</span>
         </button>
       </form>
 
-      <div class="hint">try: <span class="ex" data-v="elon musk">elon musk</span> · <span class="ex" data-v="someone@example.com">someone@example.com</span> · <span class="ex" data-v="github.com">github.com</span> · <span class="ex" data-v="+33142685500">+33142685500</span> · <span class="ex" data-v="00:14:22:01:23:45">00:14:22:01:23:45</span></div>
+      <div class="hint">
+        <span>Exemples :</span>
+        <span class="ex" data-v="John Doe">John Doe</span>
+        <span class="sep">·</span>
+        <span class="ex" data-v="elon musk">elon musk</span>
+        <span class="sep">·</span>
+        <span class="ex" data-v="someone@example.com">someone@example.com</span>
+        <span class="sep">·</span>
+        <span class="ex" data-v="+33142685500">+33142685500</span>
+        <span class="sep">·</span>
+        <span class="ex" data-v="github.com">github.com</span>
+      </div>
     </section>
 
     <section id="run-info" class="run-info hidden">
       <div class="run-meta">
-        <span><span class="k">TARGET</span> <span id="run-target"></span></span>
-        <span class="sep">|</span>
-        <span><span class="k">TYPE</span> <span id="run-type"></span></span>
-        <span class="sep">|</span>
-        <span><span class="k">SOURCES</span> <span id="run-count"></span></span>
-        <span class="sep">|</span>
-        <span><span class="k">DONE</span> <span id="run-done">0</span></span>
+        <div class="meta-item"><span class="k">CIBLE</span> <span id="run-target" class="v"></span></div>
+        <div class="meta-item"><span class="k">TYPE</span> <span id="run-type" class="v"></span></div>
+        <div class="meta-item"><span class="k">SOURCES</span> <span id="run-count" class="v"></span></div>
+        <div class="meta-item"><span class="k">COMPLÉTÉ</span> <span id="run-done" class="v">0</span></div>
       </div>
       <div class="progress"><div class="progress-bar" id="progress-bar"></div></div>
     </section>
@@ -70,11 +73,11 @@
     <section id="map-section" class="map-section hidden">
       <div class="map-head">
         <div class="map-title">
-          <span class="logo-mark">◆</span>
-          <span>GEOLOCATION INTELLIGENCE MAP</span>
+          <span class="map-icon">◈</span>
+          <span>Carte de Géolocalisation des Résultats</span>
         </div>
         <div class="map-meta">
-          <span id="map-count" class="tag tag-found">0 coordonnées</span>
+          <span id="map-count" class="map-badge">0 localisation</span>
         </div>
       </div>
       <div id="map"></div>
@@ -84,7 +87,7 @@
   </main>
 
   <footer>
-    <span>EAGLE · passive recon framework · stay legal · RGPD applicable</span>
+    <span>EAGLE · Framework OSINT Passif · Utilisation responsable & éthique</span>
   </footer>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>

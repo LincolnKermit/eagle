@@ -59,8 +59,25 @@ class DomainInfoSource(Source):
                     )
                     vals = [str(a).strip('"') for a in answers]
                     if vals:
+                        extra = {}
+                        if rtype == "A" and vals:
+                            primary_ip = vals[0]
+                            try:
+                                r_ip = await client.get(f"http://ip-api.com/json/{primary_ip}", timeout=3)
+                                if r_ip.status_code == 200:
+                                    ip_data = r_ip.json()
+                                    if ip_data.get("status") == "success":
+                                        extra["ip"] = primary_ip
+                                        extra["city"] = ip_data.get("city")
+                                        extra["country"] = ip_data.get("country")
+                                        extra["location"] = f"{ip_data.get('city')}, {ip_data.get('country')}"
+                                        extra["latitude"] = ip_data.get("lat")
+                                        extra["longitude"] = ip_data.get("lon")
+                                        extra["isp"] = ip_data.get("isp")
+                            except Exception:
+                                pass
                         result.findings.append(
-                            Finding(label=f"DNS {rtype}", value=" | ".join(vals[:8]))
+                            Finding(label=f"DNS {rtype}", value=" | ".join(vals[:8]), extra=extra)
                         )
                 except Exception:
                     continue

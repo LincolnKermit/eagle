@@ -61,11 +61,17 @@ class DuckDuckGoSource(Source):
 
                 # Strict relevance check: eliminate irrelevant results
                 if _is_pertinent(combined, clean):
+                    extra = {}
+                    from ..location import detect_location_in_text
+                    loc = detect_location_in_text(combined)
+                    if loc:
+                        extra.update(loc)
                     result.findings.append(
                         Finding(
                             label=title,
                             value=body,
                             url=href,
+                            extra=extra,
                         )
                     )
             result.found = bool(result.findings)

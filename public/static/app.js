@@ -14,6 +14,7 @@ const mapCount = document.getElementById('map-count');
 let currentEs = null;
 let leafletMap = null;
 let mapMarkers = [];
+let seenCoords = new Set();
 
 document.querySelectorAll('.hint .ex').forEach(el => {
   el.addEventListener('click', () => {
@@ -27,54 +28,89 @@ function initMapIfNeeded() {
     setTimeout(() => leafletMap.invalidateSize(), 150);
     return;
   }
-  leafletMap = L.map('map').setView([48.8566, 2.3522], 4);
+  leafletMap = L.map('map', {
+    zoomControl: true,
+    scrollWheelZoom: false,
+  }).setView([46.603354, 1.888334], 5);
+
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank">CARTO</a>',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank">CARTO</a>',
     subdomains: 'abcd',
     maxZoom: 19
   }).addTo(leafletMap);
-  setTimeout(() => leafletMap.invalidateSize(), 200);
+
+  setTimeout(() => leafletMap.invalidateSize(), 250);
 }
 
-function addCoordinateToMap(source, label, value, lat, lon, extra) {
+function addCoordinateToMap(source, label, value, lat, lon, extra = {}) {
   const latNum = parseFloat(lat);
   const lonNum = parseFloat(lon);
   if (isNaN(latNum) || isNaN(lonNum)) return;
+
+  const coordKey = `${latNum.toFixed(4)},${lonNum.toFixed(4)}`;
+  if (seenCoords.has(coordKey)) return;
+  seenCoords.add(coordKey);
 
   if (mapSection.classList.contains('hidden')) {
     mapSection.classList.remove('hidden');
     initMapIfNeeded();
   }
 
-  const region = extra.region || extra.adresse || '';
+  const city = extra.city || '';
+  const locationName = extra.location || extra.region || extra.adresse || (city ? `${city}` : '');
+  
   const popupHtml = `
-    <div style="font-family: inherit; font-size: 11px;">
-      <div style="color: #00ffd5; font-weight: 700; margin-bottom: 4px;">◆ ${escapeHtml(source.toUpperCase())}</div>
-      <div style="color: #fff; font-weight: 600;">${escapeHtml(label || '')}</div>
-      ${value ? `<div style="color: #94a3b8; margin-top: 2px;">${escapeHtml(value)}</div>` : ''}
-      ${region ? `<div style="color: #b388ff; margin-top: 4px;">📍 ${escapeHtml(region)}</div>` : ''}
-      <div style="color: #64748b; font-size: 10px; margin-top: 4px;">Lat: ${latNum.toFixed(4)}, Lon: ${lonNum.toFixed(4)}</div>
+    <div style="font-family: var(--font-sans, sans-serif); color: #f4f4f6; padding: 2px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+        <span style="color: #60a5fa; font-family: monospace; font-size: 10px; font-weight: 700; text-transform: uppercase;">
+          ◈ ${escapeHtml(source)}
+        </span>
+        ${city ? `<span style="background: rgba(59, 130, 246, 0.15); color: #93c5fd; font-size: 10px; padding: 1px 6px; border-radius: 4px;">${escapeHtml(city)}</span>` : ''}
+      </div>
+      <div style="color: #ffffff; font-weight: 600; font-size: 12px; margin-bottom: 4px;">
+        ${escapeHtml(label || '')}
+      </div>
+      ${locationName ? `<div style="color: #cbd5e1; font-size: 11px; margin-bottom: 4px;">📍 ${escapeHtml(locationName)}</div>` : ''}
+      ${value ? `<div style="color: #94a3b8; font-size: 11px; line-height: 1.4; max-height: 65px; overflow-y: auto;">${escapeHtml(value)}</div>` : ''}
+      <div style="color: #64748b; font-size: 10px; font-family: monospace; margin-top: 6px; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 4px;">
+        GPS: ${latNum.toFixed(4)}, ${lonNum.toFixed(4)}
+      </div>
     </div>
   `;
 
+  // Minimalist circle marker
   const marker = L.circleMarker([latNum, lonNum], {
     radius: 7,
-    fillColor: '#00ffd5',
+    fillColor: '#3b82f6',
     color: '#ffffff',
     weight: 2,
     opacity: 1,
-    fillOpacity: 0.85
+    fillOpacity: 0.9,
   }).addTo(leafletMap).bindPopup(popupHtml);
 
   mapMarkers.push(marker);
-  mapCount.textContent = `${mapMarkers.length} coordonnée${mapMarkers.length > 1 ? 's' : ''}`;
+  const count = mapMarkers.length;
+  mapCount.textContent = `${count} localisation${count > 1 ? 's' : ''} détectée${count > 1 ? 's' : ''}`;
 
   if (mapMarkers.length === 1) {
     leafletMap.setView([latNum, lonNum], 11);
   } else {
     const group = L.featureGroup(mapMarkers);
-    leafletMap.fitBounds(group.getBounds().pad(0.25));
+    leafletMap.fitBounds(group.getBounds().pad(0.3));
   }
+}
+
+async function tryGeocode(locStr, source, label, value, extra) {
+  if (!locStr || seenCoords.size > 15) return;
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(locStr)}&format=json&limit=1`);
+    if (r.ok) {
+      const data = await r.json();
+      if (data && data.length) {
+        addCoordinateToMap(source, label, value, data[0].lat, data[0].lon, { ...extra, location: locStr });
+      }
+    }
+  } catch (_) {}
 }
 
 form.addEventListener('submit', async (e) => {
@@ -88,7 +124,8 @@ form.addEventListener('submit', async (e) => {
   mapSection.classList.add('hidden');
   mapMarkers.forEach(m => m.remove());
   mapMarkers = [];
-  mapCount.textContent = '0 coordonnées';
+  seenCoords.clear();
+  mapCount.textContent = '0 localisation';
 
   const body = { target };
   if (typeSel.value !== 'auto') body.type = typeSel.value;
@@ -135,11 +172,14 @@ form.addEventListener('submit', async (e) => {
     const res = JSON.parse(ev.data);
     fillCard(res);
 
-    // Extract geolocation coordinates for map
+    // Extract geolocation coordinates or location names for map
     if (res.findings && res.findings.length) {
       for (const f of res.findings) {
         if (f.extra && f.extra.latitude != null && f.extra.longitude != null) {
           addCoordinateToMap(res.source, f.label, f.value, f.extra.latitude, f.extra.longitude, f.extra);
+        } else if (f.extra && (f.extra.city || f.extra.location || f.extra.adresse)) {
+          const locStr = f.extra.location || f.extra.adresse || f.extra.city;
+          tryGeocode(locStr, res.source, f.label, f.value, f.extra);
         }
       }
     }
@@ -185,16 +225,16 @@ function fillCard(res) {
 
   const meta = card.querySelector('.card-meta');
   let tag;
-  if (res.error) tag = '<span class="tag tag-error">error</span>';
+  if (res.error) tag = '<span class="tag tag-error">erreur</span>';
   else if (res.found) tag = `<span class="tag tag-found">${res.findings.length} hit${res.findings.length === 1 ? '' : 's'}</span>`;
-  else tag = '<span class="tag tag-empty">empty</span>';
+  else tag = '<span class="tag tag-empty">vide</span>';
   meta.innerHTML = `${tag}<span>${res.elapsed_ms}ms</span>`;
 
   const body = card.querySelector('.card-body');
   if (res.error) {
     body.innerHTML = `<div class="error-msg">${escapeHtml(res.error)}</div>`;
   } else if (!res.findings.length) {
-    body.innerHTML = `<div class="empty-msg">no results</div>`;
+    body.innerHTML = `<div class="empty-msg">Aucun résultat concluant</div>`;
   } else {
     body.innerHTML = res.findings.map(renderFinding).join('');
   }
