@@ -39,6 +39,11 @@ class UsernameSitesSource(Source):
     async def lookup(self, target: str, client: httpx.AsyncClient) -> Result:
         start = time.monotonic()
         result = Result(source=self.name, target=target, found=False)
+        clean = target.strip()
+        if " " in clean:
+            # Usernames cannot contain spaces
+            result.elapsed_ms = int((time.monotonic() - start) * 1000)
+            return result
 
         async def check(name: str, pattern: str, kind):
             url = pattern.format(u=target)

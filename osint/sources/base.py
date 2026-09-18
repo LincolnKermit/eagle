@@ -6,7 +6,7 @@ from typing import Any, Literal, Optional
 
 import httpx
 
-InputType = Literal["email", "username", "phone", "domain", "bssid"]
+InputType = Literal["email", "username", "phone", "domain", "bssid", "person"]
 
 
 @dataclass

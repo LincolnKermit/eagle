@@ -6,36 +6,71 @@ import httpx
 from .base import Finding, Result, Source
 
 
+import re
+
+
+def _is_pertinent(text: str, target: str) -> bool:
+    clean = target.strip().strip('"').strip("'").lower()
+    text_lower = text.lower()
+    text_clean = re.sub(r"[^a-z0-9]", " ", text_lower)
+
+    if "@" in clean:
+        local, _, domain = clean.partition("@")
+        return clean in text_lower or (local in text_clean and domain in text_clean)
+
+    tokens = [t for t in re.findall(r"[a-z0-9]+", clean) if len(t) > 1]
+    if not tokens:
+        return clean in text_lower
+    return all(tok in text_clean for tok in tokens)
+
+
 class DuckDuckGoSource(Source):
     name = "duckduckgo"
     description = "Open web search via DuckDuckGo."
-    input_types = ("email", "username", "phone", "domain")
-
-    def _build_query(self, target: str) -> str:
-        return f'"{target}"'
+    input_types = ("email", "username", "phone", "domain", "bssid", "person")
 
     async def lookup(self, target: str, client: httpx.AsyncClient) -> Result:
         start = time.monotonic()
         result = Result(source=self.name, target=target, found=False)
-        q = self._build_query(target)
+        clean = target.strip().strip('"').strip("'")
         try:
             from ddgs import DDGS
 
             def _do() -> list[dict]:
+                hits = []
                 with DDGS() as ddgs:
-                    return list(ddgs.text(q, max_results=12))
+                    # 1. Try quoted exact phrase search
+                    try:
+                        hits = list(ddgs.text(f'"{clean}"', max_results=12))
+                    except Exception:
+                        hits = []
+                    # 2. Fallback to broad search if exact phrase returned nothing
+                    if not hits:
+                        try:
+                            hits = list(ddgs.text(clean, max_results=20))
+                        except Exception:
+                            hits = []
+                return hits
 
-            hits = await asyncio.to_thread(_do)
-            for h in hits:
-                result.findings.append(
-                    Finding(
-                        label=h.get("title", "")[:140] or "(no title)",
-                        value=(h.get("body") or "")[:240],
-                        url=h.get("href"),
+            raw_hits = await asyncio.to_thread(_do)
+            for h in raw_hits:
+                title = h.get("title", "")[:140] or "(no title)"
+                body = (h.get("body") or "")[:240]
+                href = h.get("href")
+                combined = f"{title} {body} {href or ''}"
+
+                # Strict relevance check: eliminate irrelevant results
+                if _is_pertinent(combined, clean):
+                    result.findings.append(
+                        Finding(
+                            label=title,
+                            value=body,
+                            url=href,
+                        )
                     )
-                )
             result.found = bool(result.findings)
         except Exception as e:
             result.error = str(e)
         result.elapsed_ms = int((time.monotonic() - start) * 1000)
         return result
+

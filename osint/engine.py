@@ -6,7 +6,7 @@ from .http_client import make_client
 from .sources.base import InputType, Result, Source
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-BSSID_RE = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$", re.I)
+BSSID_RE = re.compile(r"^[0-9a-f]{2}([:-][0-9a-f]{2}){5}$", re.I)
 DIGITS_RE = re.compile(r"^\+?[\d\s().-]{7,}$")
 
 
@@ -20,29 +20,45 @@ def detect_input_type(target: str) -> InputType:
         return "phone"
     if "." in t and " " not in t and "/" not in t:
         return "domain"
+    if " " in t:
+        return "person"
     return "username"
 
 
 def _all_sources() -> list[Source]:
+    from .sources.annuaire import AnnuaireSource
+    from .sources.archive import ArchiveSource
+    from .sources.bssid import BssidSource
+    from .sources.db_searcher import DBSearcherSource
     from .sources.domain import CrtShSource, DomainInfoSource
     from .sources.duckduckgo import DuckDuckGoSource
     from .sources.github import GitHubUsernameSource
     from .sources.google import GoogleSource
+    from .sources.google_activity import GoogleActivitySource
     from .sources.gravatar import GravatarSource
     from .sources.holehe_check import HoleheSource
     from .sources.phone import PhoneInfoSource
     from .sources.username_sites import UsernameSitesSource
+    from .sources.wikipedia import WikipediaSource
+    from .sources.yandex import YandexSource
 
     return [
         GravatarSource(),
         HoleheSource(),
+        DBSearcherSource(),
+        GoogleActivitySource(),
         GitHubUsernameSource(),
         UsernameSitesSource(),
+        WikipediaSource(),
         PhoneInfoSource(),
         DomainInfoSource(),
         CrtShSource(),
+        BssidSource(),
         GoogleSource(),
         DuckDuckGoSource(),
+        YandexSource(),
+        ArchiveSource(),
+        AnnuaireSource(),
     ]
 
 

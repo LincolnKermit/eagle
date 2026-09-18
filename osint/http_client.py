@@ -15,7 +15,6 @@ def make_client(timeout: float = 15.0) -> httpx.AsyncClient:
         "User-Agent": random.choice(USER_AGENTS),
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
         "Upgrade-Insecure-Requests": "1",
     }
     try:

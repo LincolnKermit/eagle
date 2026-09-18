@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
@@ -29,17 +30,19 @@
 
   <main>
     <section class="hero">
-      <div class="hero-tag">v0.1 · passive recon</div>
+      <div class="hero-tag">v0.2 · multi-source passive recon & geoint</div>
       <h1>Scan a target.</h1>
-      <p class="sub">Email · Username · Phone · Domain — pure scraping, no third-party APIs.</p>
+      <p class="sub">Person · Email · Username · Phone · Domain · BSSID — multi-engine intelligence & geolocation.</p>
 
       <form id="search-form" class="search">
         <select id="type" aria-label="input type">
           <option value="auto">AUTO</option>
+          <option value="person">PERSON / NAME</option>
           <option value="email">EMAIL</option>
           <option value="username">USERNAME</option>
           <option value="phone">PHONE</option>
           <option value="domain">DOMAIN</option>
+          <option value="bssid">BSSID</option>
         </select>
         <input id="target" type="text" placeholder="target..." autocomplete="off" autofocus spellcheck="false" />
         <button type="submit">
@@ -48,7 +51,7 @@
         </button>
       </form>
 
-      <div class="hint">try: <span class="ex" data-v="elonmusk">elonmusk</span> · <span class="ex" data-v="someone@example.com">someone@example.com</span> · <span class="ex" data-v="github.com">github.com</span> · <span class="ex" data-v="+33612345678">+33612345678</span></div>
+      <div class="hint">try: <span class="ex" data-v="elon musk">elon musk</span> · <span class="ex" data-v="someone@example.com">someone@example.com</span> · <span class="ex" data-v="github.com">github.com</span> · <span class="ex" data-v="+33142685500">+33142685500</span> · <span class="ex" data-v="00:14:22:01:23:45">00:14:22:01:23:45</span></div>
     </section>
 
     <section id="run-info" class="run-info hidden">
@@ -64,6 +67,19 @@
       <div class="progress"><div class="progress-bar" id="progress-bar"></div></div>
     </section>
 
+    <section id="map-section" class="map-section hidden">
+      <div class="map-head">
+        <div class="map-title">
+          <span class="logo-mark">◆</span>
+          <span>GEOLOCATION INTELLIGENCE MAP</span>
+        </div>
+        <div class="map-meta">
+          <span id="map-count" class="tag tag-found">0 coordonnées</span>
+        </div>
+      </div>
+      <div id="map"></div>
+    </section>
+
     <section id="results" class="results"></section>
   </main>
 
@@ -71,6 +87,7 @@
     <span>EAGLE · passive recon framework · stay legal · RGPD applicable</span>
   </footer>
 
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

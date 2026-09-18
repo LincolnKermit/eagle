@@ -8,8 +8,12 @@ const runType = document.getElementById('run-type');
 const runCount = document.getElementById('run-count');
 const runDone = document.getElementById('run-done');
 const progressBar = document.getElementById('progress-bar');
+const mapSection = document.getElementById('map-section');
+const mapCount = document.getElementById('map-count');
 
 let currentEs = null;
+let leafletMap = null;
+let mapMarkers = [];
 
 document.querySelectorAll('.hint .ex').forEach(el => {
   el.addEventListener('click', () => {
@@ -17,6 +21,61 @@ document.querySelectorAll('.hint .ex').forEach(el => {
     input.focus();
   });
 });
+
+function initMapIfNeeded() {
+  if (leafletMap) {
+    setTimeout(() => leafletMap.invalidateSize(), 150);
+    return;
+  }
+  leafletMap = L.map('map').setView([48.8566, 2.3522], 4);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank">CARTO</a>',
+    subdomains: 'abcd',
+    maxZoom: 19
+  }).addTo(leafletMap);
+  setTimeout(() => leafletMap.invalidateSize(), 200);
+}
+
+function addCoordinateToMap(source, label, value, lat, lon, extra) {
+  const latNum = parseFloat(lat);
+  const lonNum = parseFloat(lon);
+  if (isNaN(latNum) || isNaN(lonNum)) return;
+
+  if (mapSection.classList.contains('hidden')) {
+    mapSection.classList.remove('hidden');
+    initMapIfNeeded();
+  }
+
+  const region = extra.region || extra.adresse || '';
+  const popupHtml = `
+    <div style="font-family: inherit; font-size: 11px;">
+      <div style="color: #00ffd5; font-weight: 700; margin-bottom: 4px;">◆ ${escapeHtml(source.toUpperCase())}</div>
+      <div style="color: #fff; font-weight: 600;">${escapeHtml(label || '')}</div>
+      ${value ? `<div style="color: #94a3b8; margin-top: 2px;">${escapeHtml(value)}</div>` : ''}
+      ${region ? `<div style="color: #b388ff; margin-top: 4px;">📍 ${escapeHtml(region)}</div>` : ''}
+      <div style="color: #64748b; font-size: 10px; margin-top: 4px;">Lat: ${latNum.toFixed(4)}, Lon: ${lonNum.toFixed(4)}</div>
+    </div>
+  `;
+
+  const marker = L.circleMarker([latNum, lonNum], {
+    radius: 7,
+    fillColor: '#00ffd5',
+    color: '#ffffff',
+    weight: 2,
+    opacity: 1,
+    fillOpacity: 0.85
+  }).addTo(leafletMap).bindPopup(popupHtml);
+
+  mapMarkers.push(marker);
+  mapCount.textContent = `${mapMarkers.length} coordonnée${mapMarkers.length > 1 ? 's' : ''}`;
+
+  if (mapMarkers.length === 1) {
+    leafletMap.setView([latNum, lonNum], 11);
+  } else {
+    const group = L.featureGroup(mapMarkers);
+    leafletMap.fitBounds(group.getBounds().pad(0.25));
+  }
+}
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -26,6 +85,10 @@ form.addEventListener('submit', async (e) => {
 
   resultsEl.innerHTML = '';
   runInfo.classList.add('hidden');
+  mapSection.classList.add('hidden');
+  mapMarkers.forEach(m => m.remove());
+  mapMarkers = [];
+  mapCount.textContent = '0 coordonnées';
 
   const body = { target };
   if (typeSel.value !== 'auto') body.type = typeSel.value;
@@ -64,15 +127,28 @@ form.addEventListener('submit', async (e) => {
   es.addEventListener('result', (ev) => {
     const res = JSON.parse(ev.data);
     fillCard(res);
+
+    // Extract geolocation coordinates for map
+    if (res.findings && res.findings.length) {
+      for (const f of res.findings) {
+        if (f.extra && f.extra.latitude != null && f.extra.longitude != null) {
+          addCoordinateToMap(res.source, f.label, f.value, f.extra.latitude, f.extra.longitude, f.extra);
+        }
+      }
+    }
+
     done++;
     runDone.textContent = String(done);
     progressBar.style.width = `${(done / total) * 100}%`;
   });
+
   es.addEventListener('done', () => {
     progressBar.style.width = '100%';
     es.close();
     currentEs = null;
+    if (leafletMap) setTimeout(() => leafletMap.invalidateSize(), 300);
   });
+
   es.onerror = () => { es.close(); currentEs = null; };
 });
 
