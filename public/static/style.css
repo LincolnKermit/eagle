@@ -336,6 +336,8 @@ main {
   padding: 14px 20px;
   border-bottom: 1px solid var(--border);
   background: var(--surface-subtle);
+  flex-wrap: wrap;
+  gap: 10px;
 }
 .section-title {
   display: flex;
@@ -355,6 +357,7 @@ main {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 /* Badges */
@@ -381,27 +384,58 @@ main {
   color: var(--text-dim);
 }
 
+/* Location Pills in Map Header */
+.loc-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-strong);
+  color: #ffffff;
+}
+.loc-flag {
+  font-size: 14px;
+  line-height: 1;
+}
+
 /* Map Section */
 #map {
-  height: 380px;
+  height: 400px;
   width: 100%;
-  background: #09090b;
+  background: #111114;
 }
 .leaflet-container {
-  background: #09090b !important;
+  background: #111114 !important;
   font-family: var(--font-sans) !important;
 }
+.leaflet-tile {
+  filter: brightness(0.9) contrast(1.05);
+}
 .leaflet-popup-content-wrapper, .leaflet-popup-tip {
-  background: #18181b !important;
+  background: #18181f !important;
   color: var(--text) !important;
   border: 1px solid var(--border-strong) !important;
-  border-radius: 6px !important;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.7) !important;
 }
 .leaflet-popup-content {
   font-size: 12px !important;
   line-height: 1.5 !important;
   margin: 12px 14px !important;
+}
+.map-popup-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 13px;
+  color: #ffffff;
+  margin-bottom: 6px;
 }
 
 /* -------------------------------------------------------------
@@ -578,6 +612,9 @@ main {
   border: 1px solid var(--accent-border);
   padding: 1px 7px;
   border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 /* -------------------------------------------------------------

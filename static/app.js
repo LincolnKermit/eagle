@@ -25,11 +25,40 @@ let currentEs = null;
 let leafletMap = null;
 let mapMarkers = [];
 let seenCoords = new Set();
+let detectedLocations = new Map(); // key -> { city, country, flag, text }
 
 // State for Social Media & Web Deduplication
 let socialMap = new Map(); // platformName -> { name, url, exists, checked }
 let seenWebUrls = new Map(); // normalizedUrl -> { el, finding }
 let otherSourceCards = new Map(); // sourceName -> cardEl
+
+// Flag dictionary for countries & common aliases
+const COUNTRY_FLAGS = {
+  "france": "🇫🇷", "fr": "🇫🇷",
+  "algeria": "🇩🇿", "algérie": "🇩🇿", "dz": "🇩🇿",
+  "morocco": "🇲🇦", "maroc": "🇲🇦", "ma": "🇲🇦",
+  "tunisia": "🇹🇳", "tunisie": "🇹🇳", "tn": "🇹🇳",
+  "united states": "🇺🇸", "usa": "🇺🇸", "us": "🇺🇸", "états-unis": "🇺🇸",
+  "united kingdom": "🇬🇧", "uk": "🇬🇧", "gb": "🇬🇧", "royaume-uni": "🇬🇧",
+  "belgium": "🇧🇪", "belgique": "🇧🇪", "be": "🇧🇪",
+  "switzerland": "🇨🇭", "suisse": "🇨🇭", "ch": "🇨🇭",
+  "germany": "🇩🇪", "allemagne": "🇩🇪", "de": "🇩🇪",
+  "canada": "🇨🇦", "ca": "🇨🇦",
+  "spain": "🇪🇸", "espagne": "🇪🇸", "es": "🇪🇸",
+  "italy": "🇮🇹", "italie": "🇮🇹", "it": "🇮🇹",
+  "japan": "🇯🇵", "japon": "🇯🇵", "jp": "🇯🇵",
+  "united arab emirates": "🇦🇪", "uae": "🇦🇪", "ae": "🇦🇪",
+  "russia": "🇷🇺", "russie": "🇷🇺", "ru": "🇷🇺",
+};
+
+function getCountryFlag(countryName) {
+  if (!countryName) return "📍";
+  const str = countryName.toLowerCase().trim();
+  for (const [k, v] of Object.entries(COUNTRY_FLAGS)) {
+    if (str === k || str.includes(k)) return v;
+  }
+  return "📍";
+}
 
 // Clickable hints
 document.querySelectorAll('.hint .ex').forEach(el => {
@@ -39,7 +68,7 @@ document.querySelectorAll('.hint .ex').forEach(el => {
   });
 });
 
-// Map Initializer
+// Map Initializer using ESRI Dark Gray Canvas (100% free, no API key required, sleek dark base)
 function initMapIfNeeded() {
   if (leafletMap) {
     setTimeout(() => leafletMap.invalidateSize(), 150);
@@ -50,13 +79,30 @@ function initMapIfNeeded() {
     scrollWheelZoom: false,
   }).setView([46.603354, 1.888334], 5);
 
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank">CARTO</a>',
-    subdomains: 'abcd',
-    maxZoom: 19
+  // ESRI Dark Gray Base: free, fast, modern, zero watermark, zero API key
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+    attribution: '&copy; <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a> &mdash; World Dark Canvas',
+    maxZoom: 16,
+  }).addTo(leafletMap);
+
+  // ESRI Dark Gray Reference: labels for cities & countries
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+    attribution: '',
+    maxZoom: 16,
   }).addTo(leafletMap);
 
   setTimeout(() => leafletMap.invalidateSize(), 250);
+}
+
+function updateMapHeader() {
+  if (!detectedLocations.size) {
+    mapCount.textContent = `${mapMarkers.length} localisation${mapMarkers.length > 1 ? 's' : ''}`;
+    return;
+  }
+  const pills = Array.from(detectedLocations.values())
+    .map(l => `<span class="loc-pill"><span class="loc-flag">${l.flag}</span> ${escapeHtml(l.label)}</span>`)
+    .join(' ');
+  mapCount.innerHTML = pills;
 }
 
 function addCoordinateToMap(source, label, value, lat, lon, extra = {}) {
@@ -74,22 +120,34 @@ function addCoordinateToMap(source, label, value, lat, lon, extra = {}) {
   }
 
   const city = extra.city || '';
-  const locationName = extra.location || extra.region || extra.adresse || (city ? `${city}` : '');
+  const country = extra.country || '';
+  const flag = extra.flag || getCountryFlag(country || extra.location || '');
   
+  const displayLocation = city ? (country ? `${city}, ${country}` : city) : (country || extra.location || 'Localisation détectée');
+  const locKey = city || country || coordKey;
+  
+  if (!detectedLocations.has(locKey)) {
+    detectedLocations.set(locKey, {
+      city,
+      country,
+      flag,
+      label: displayLocation,
+    });
+  }
+
+  updateMapHeader();
+
   const popupHtml = `
     <div style="font-family: var(--font-sans, sans-serif); color: #f4f4f6; padding: 2px;">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-        <span style="color: #60a5fa; font-family: monospace; font-size: 10px; font-weight: 700; text-transform: uppercase;">
-          ◈ LOCALISATION
-        </span>
-        ${city ? `<span style="background: rgba(59, 130, 246, 0.15); color: #93c5fd; font-size: 10px; padding: 1px 6px; border-radius: 4px;">${escapeHtml(city)}</span>` : ''}
+      <div class="map-popup-header">
+        <span style="font-size: 16px;">${flag}</span>
+        <span>${escapeHtml(displayLocation)}</span>
       </div>
       <div style="color: #ffffff; font-weight: 600; font-size: 12px; margin-bottom: 4px;">
         ${escapeHtml(label || '')}
       </div>
-      ${locationName ? `<div style="color: #cbd5e1; font-size: 11px; margin-bottom: 4px;">📍 ${escapeHtml(locationName)}</div>` : ''}
-      ${value ? `<div style="color: #94a3b8; font-size: 11px; line-height: 1.4; max-height: 65px; overflow-y: auto;">${escapeHtml(value)}</div>` : ''}
-      <div style="color: #64748b; font-size: 10px; font-family: monospace; margin-top: 6px; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 4px;">
+      ${value ? `<div style="color: #94a3b8; font-size: 11px; line-height: 1.4; max-height: 70px; overflow-y: auto; margin-bottom: 6px;">${escapeHtml(value)}</div>` : ''}
+      <div style="color: #64748b; font-size: 10px; font-family: monospace; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 5px;">
         GPS: ${latNum.toFixed(4)}, ${lonNum.toFixed(4)}
       </div>
     </div>
@@ -105,8 +163,6 @@ function addCoordinateToMap(source, label, value, lat, lon, extra = {}) {
   }).addTo(leafletMap).bindPopup(popupHtml);
 
   mapMarkers.push(marker);
-  const count = mapMarkers.length;
-  mapCount.textContent = `${count} localisation${count > 1 ? 's' : ''} détectée${count > 1 ? 's' : ''}`;
 
   if (mapMarkers.length === 1) {
     leafletMap.setView([latNum, lonNum], 11);
@@ -134,10 +190,8 @@ function normalizeUrl(rawUrl) {
   if (!rawUrl) return '';
   try {
     const u = new URL(rawUrl);
-    // Ignore URL fragments and protocol discrepancies (http vs https)
     let host = u.hostname.toLowerCase().replace(/^www\./, '');
     let pathname = u.pathname.replace(/\/+$/, '');
-    // Clean tracking query params
     const params = new URLSearchParams();
     for (const [k, v] of u.searchParams.entries()) {
       if (!k.startsWith('utm_') && !['ref', 'ref_src', 'fbclid', 'igshid', 's', 't'].includes(k)) {
@@ -203,7 +257,6 @@ function updateSocialPlatform(name, url, exists) {
 
   const existing = socialMap.get(name);
   if (existing && existing.exists && !exists) {
-    // Keep true if already verified as existing
     return;
   }
 
@@ -213,7 +266,6 @@ function updateSocialPlatform(name, url, exists) {
     exists: Boolean(exists),
   });
 
-  // Re-render or update tile in grid
   let tile = socialGrid.querySelector(`.social-tile[data-platform="${cssEscape(name)}"]`);
   const tileHtml = renderSocialTile(name, url, Boolean(exists));
   
@@ -223,7 +275,6 @@ function updateSocialPlatform(name, url, exists) {
     socialGrid.insertAdjacentHTML('beforeend', tileHtml);
   }
 
-  // Update counters
   let foundCount = 0;
   for (const item of socialMap.values()) {
     if (item.exists) foundCount++;
@@ -240,7 +291,6 @@ function addWebFinding(finding) {
 
   const norm = normalizeUrl(finding.url);
   if (norm && seenWebUrls.has(norm)) {
-    // URL already indexed: merge richer snippet if available
     const existing = seenWebUrls.get(norm);
     if ((!existing.value || existing.value.length < (finding.value || '').length) && finding.value) {
       existing.value = finding.value;
@@ -253,7 +303,16 @@ function addWebFinding(finding) {
   const title = finding.label || '(Sans titre)';
   const desc = finding.value || '';
   const url = finding.url || '';
-  const loc = finding.extra && finding.extra.location ? finding.extra.location : (finding.extra && finding.extra.city ? finding.extra.city : null);
+  
+  // Format location badge with country flag emoji
+  let locBadgeHtml = '';
+  if (finding.extra && (finding.extra.location || finding.extra.city || finding.extra.country)) {
+    const city = finding.extra.city || '';
+    const country = finding.extra.country || '';
+    const flag = finding.extra.flag || getCountryFlag(country || finding.extra.location || '');
+    const text = city ? (country ? `${city}, ${country}` : city) : (country || finding.extra.location);
+    locBadgeHtml = `<span class="web-loc">${flag} ${escapeHtml(text)}</span>`;
+  }
 
   const card = document.createElement('div');
   card.className = 'web-finding-card';
@@ -264,7 +323,7 @@ function addWebFinding(finding) {
     </div>
     <div class="web-meta">
       ${url ? `<div class="web-url"><a href="${escapeAttr(url)}" target="_blank" rel="noopener">${escapeHtml(url)}</a></div>` : ''}
-      ${loc ? `<span class="web-loc">📍 ${escapeHtml(loc)}</span>` : ''}
+      ${locBadgeHtml}
     </div>
   `;
 
@@ -379,11 +438,12 @@ form.addEventListener('submit', async (e) => {
   mapMarkers.forEach(m => m.remove());
   mapMarkers = [];
   seenCoords.clear();
+  detectedLocations.clear();
   socialMap.clear();
   seenWebUrls.clear();
   otherSourceCards.clear();
 
-  mapCount.textContent = '0 coordonnée';
+  mapCount.textContent = '0 localisation';
   socialFoundCount.textContent = '0 profil détecté';
   socialTotalCount.textContent = '0 testé';
   webCount.textContent = '0 résultat unique';

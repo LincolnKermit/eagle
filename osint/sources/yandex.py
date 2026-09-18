@@ -169,11 +169,7 @@ class YandexSource(Source):
                 "direct_url": url,
             }
             if loc:
-                extra["city"] = loc["city"]
-                extra["country"] = loc["country"]
-                extra["location"] = loc["location"]
-                extra["latitude"] = loc["latitude"]
-                extra["longitude"] = loc["longitude"]
+                extra.update(loc)
 
             return Finding(
                 label=page_title[:140] or "(page sans titre)",
