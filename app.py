@@ -8,7 +8,21 @@ from flask import Flask, Response, jsonify, render_template, request
 
 from osint.engine import detect_input_type, get_sources_for, run_lookup_stream
 
-app = Flask(__name__)
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = (
+    os.path.join(BASE_DIR, "public", "static")
+    if os.path.isdir(os.path.join(BASE_DIR, "public", "static"))
+    else os.path.join(BASE_DIR, "static")
+)
+
+app = Flask(
+    __name__,
+    template_folder=os.path.join(BASE_DIR, "templates"),
+    static_folder=STATIC_DIR,
+    static_url_path="/static",
+)
 JOBS: dict[str, queue.Queue] = {}
 
 
