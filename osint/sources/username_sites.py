@@ -73,14 +73,24 @@ class UsernameSitesSource(Source):
         # DIRECT HTTP CHECKERS (100% RELIABLE & NO FALSE POSITIVES)
         # -------------------------------------------------------------
 
+        RESERVED_GITHUB = {
+            "about", "pricing", "features", "marketplace", "topics", "collections",
+            "trending", "events", "community", "enterprise", "customer-stories",
+            "security", "login", "join", "signup", "settings", "notifications",
+            "explore", "search", "pulls", "issues", "codespaces", "sponsors"
+        }
+
         async def check_github() -> Finding:
             for u in candidates:
+                if u.lower() in RESERVED_GITHUB:
+                    continue
                 url = f"https://github.com/{u}"
                 async with sem:
                     try:
                         r = await client.get(url, headers=headers, timeout=5, follow_redirects=True)
-                        if r.status_code == 200:
-                            return make_finding("GitHub", True, url)
+                        if r.status_code == 200 and r.url.path.strip("/").lower() == u.lower():
+                            if any(k in r.text for k in ["vcard", "user-profile-nav", "itemprop=\"name\"", "og:type\" content=\"profile\"", "org-header"]):
+                                return make_finding("GitHub", True, url)
                     except Exception:
                         pass
             return make_finding("GitHub", False, f"https://github.com/{primary_u}")
@@ -144,11 +154,7 @@ class UsernameSitesSource(Source):
                 async with sem:
                     try:
                         r = await client.get(url, headers=yt_headers, timeout=5, follow_redirects=True)
-                        if (
-                            r.status_code == 200
-                            and "404 Not Found" not in r.text
-                            and "Before you continue to YouTube" not in r.text
-                        ):
+                        if r.status_code == 200 and ("channelId" in r.text or "canonicalBaseUrl" in r.text):
                             return make_finding("YouTube", True, url)
                     except Exception:
                         pass
@@ -160,7 +166,7 @@ class UsernameSitesSource(Source):
                 async with sem:
                     try:
                         r = await client.get(url, headers=headers, timeout=5, follow_redirects=True)
-                        if r.status_code == 200 and ("isLiveBroadcast" in r.text or "channel_id" in r.text):
+                        if r.status_code == 200 and 'name="twitter:card"' in r.text and ('- Twitch' in r.text or '- Live on Twitch' in r.text):
                             return make_finding("Twitch", True, url)
                     except Exception:
                         pass
@@ -232,24 +238,24 @@ class UsernameSitesSource(Source):
 
         async def check_chess() -> Finding:
             for u in candidates:
-                url = f"https://www.chess.com/member/{u}"
+                api_url = f"https://api.chess.com/pub/player/{u.lower()}"
                 async with sem:
                     try:
-                        r = await client.get(url, headers=headers, timeout=5, follow_redirects=True)
-                        if r.status_code == 200 and "Missing Page" not in r.text:
-                            return make_finding("Chess.com", True, url)
+                        r = await client.get(api_url, headers=headers, timeout=5)
+                        if r.status_code == 200 and r.json().get("username"):
+                            return make_finding("Chess.com", True, f"https://www.chess.com/member/{u}")
                     except Exception:
                         pass
             return make_finding("Chess.com", False, f"https://www.chess.com/member/{primary_u}")
 
         async def check_devto() -> Finding:
             for u in candidates:
-                url = f"https://dev.to/{u}"
+                api_url = f"https://dev.to/api/users/by_username?url={u.lower()}"
                 async with sem:
                     try:
-                        r = await client.get(url, headers=headers, timeout=5, follow_redirects=True)
-                        if r.status_code == 200 and "404: Page Not Found" not in r.text:
-                            return make_finding("DEV.to", True, url)
+                        r = await client.get(api_url, headers=headers, timeout=5)
+                        if r.status_code == 200 and r.json().get("username"):
+                            return make_finding("DEV.to", True, f"https://dev.to/{u}")
                     except Exception:
                         pass
             return make_finding("DEV.to", False, f"https://dev.to/{primary_u}")
@@ -268,12 +274,12 @@ class UsernameSitesSource(Source):
 
         async def check_keybase() -> Finding:
             for u in candidates:
-                url = f"https://keybase.io/{u}"
+                api_url = f"https://keybase.io/_/api/1.0/user/lookup.json?usernames={u}"
                 async with sem:
                     try:
-                        r = await client.get(url, headers=headers, timeout=5, follow_redirects=True)
-                        if r.status_code == 200:
-                            return make_finding("Keybase", True, url)
+                        r = await client.get(api_url, headers=headers, timeout=5)
+                        if r.status_code == 200 and isinstance(r.json().get("them"), list) and r.json()["them"] and r.json()["them"][0] is not None:
+                            return make_finding("Keybase", True, f"https://keybase.io/{u}")
                     except Exception:
                         pass
             return make_finding("Keybase", False, f"https://keybase.io/{primary_u}")
@@ -296,7 +302,12 @@ class UsernameSitesSource(Source):
                 async with sem:
                     try:
                         r = await client.get(url, headers=headers, timeout=5, follow_redirects=True)
-                        if r.status_code == 200 and "can’t find that page" not in r.text:
+                        if (
+                            r.status_code == 200
+                            and "can’t find that page" not in r.text
+                            and "cant find that page" not in r.text
+                            and ("Profile-root" in r.text or "profile-info" in r.text or "user-profile" in r.text)
+                        ):
                             return make_finding("Behance", True, url)
                     except Exception:
                         pass
@@ -322,10 +333,10 @@ class UsernameSitesSource(Source):
                                     m = re.search(r"instagram\.com/([a-zA-Z0-9._-]+)", href)
                                     if m:
                                         u_found = m.group(1).lower().rstrip("/")
-                                        if u_found in ["p", "explore", "reels", "stories", "accounts", "about", "legal", "developer"]:
+                                        if u_found in ["p", "reel", "reels", "stories", "explore", "accounts", "about", "legal", "developer", "popular", "tags", "direct", "tv", "channel"]:
                                             continue
-                                        if u_found in cand_lower or (tokens and all(t in u_found for t in tokens)):
-                                            found_map["Instagram"] = href
+                                        if u_found in cand_lower:
+                                            found_map["Instagram"] = f"https://www.instagram.com/{u_found}/"
                                             break
                                 if "Instagram" in found_map:
                                     break
@@ -336,7 +347,7 @@ class UsernameSitesSource(Source):
 
                     # 2. LinkedIn
                     try:
-                        for q in [f"site:linkedin.com {clean}", f"{clean} linkedin"]:
+                        for q in [f"site:linkedin.com/in/ {clean}", f"{clean} linkedin in"]:
                             try:
                                 hits = list(ddgs.text(q, max_results=5))
                                 for h in hits:
@@ -344,8 +355,10 @@ class UsernameSitesSource(Source):
                                     m = re.search(r"linkedin\.com/in/([a-zA-Z0-9._-]+)", href)
                                     if m:
                                         u_found = m.group(1).lower().rstrip("/")
-                                        if u_found in cand_lower or (tokens and all(t in u_found for t in tokens)):
-                                            found_map["LinkedIn"] = href
+                                        if u_found in ["dir", "pub", "feed", "jobs", "company", "school", "learning", "pulse"]:
+                                            continue
+                                        if u_found in cand_lower or any(u_found.startswith(f"{c}-") for c in cand_lower):
+                                            found_map["LinkedIn"] = f"https://www.linkedin.com/in/{u_found}/"
                                             break
                                 if "LinkedIn" in found_map:
                                     break
@@ -356,7 +369,7 @@ class UsernameSitesSource(Source):
 
                     # 3. Reddit
                     try:
-                        for q in [f"site:reddit.com/user/ {clean}", f"{clean} reddit"]:
+                        for q in [f"site:reddit.com/user/ {clean}", f"{clean} reddit user"]:
                             try:
                                 hits = list(ddgs.text(q, max_results=4))
                                 for h in hits:
@@ -364,8 +377,10 @@ class UsernameSitesSource(Source):
                                     m = re.search(r"reddit\.com/user/([a-zA-Z0-9._-]+)", href)
                                     if m:
                                         u_found = m.group(1).lower().rstrip("/")
-                                        if u_found in cand_lower or (tokens and all(t in u_found for t in tokens)):
-                                            found_map["Reddit"] = href
+                                        if u_found in ["r", "subreddits", "coins", "premium"]:
+                                            continue
+                                        if u_found in cand_lower:
+                                            found_map["Reddit"] = f"https://www.reddit.com/user/{u_found}/"
                                             break
                                 if "Reddit" in found_map:
                                     break

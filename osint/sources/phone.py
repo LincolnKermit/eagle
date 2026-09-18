@@ -42,7 +42,10 @@ class PhoneInfoSource(Source):
             if not num or not phonenumbers.is_valid_number(num):
                 result.error = "Numéro invalide ou format non reconnu (essayez avec indicatif, ex: +33...)."
             else:
-                country = geocoder.description_for_number(num, "fr")
+                country = geocoder.country_name_for_number(num, "fr") or geocoder.description_for_number(num, "fr") or ""
+                region = geocoder.description_for_number(num, "fr") or ""
+                pays_label = f"{region}, {country}" if region and region != country else (country or "(inconnu)")
+
                 op = carrier.name_for_number(num, "fr")
                 tz = timezone.time_zones_for_number(num)
                 fmt_intl = phonenumbers.format_number(
@@ -59,7 +62,7 @@ class PhoneInfoSource(Source):
                     9: "UAN", 10: "UNKNOWN", 27: "EMERGENCY",
                 }
                 result.found = True
-                result.findings.append(Finding(label="Pays / Région", value=country or "(inconnu)"))
+                result.findings.append(Finding(label="Pays / Région", value=pays_label))
                 result.findings.append(Finding(label="Opérateur", value=op or "(inconnu)"))
                 result.findings.append(Finding(label="Type", value=line_names.get(line_type, str(line_type))))
                 result.findings.append(Finding(label="Fuseaux", value=", ".join(tz)))
@@ -67,7 +70,7 @@ class PhoneInfoSource(Source):
                 result.findings.append(Finding(label="Format E.164", value=fmt_e164))
 
                 # Estimate probable location coordinates for map
-                loc_name = country or ""
+                loc_name = region if region and region.lower() != country.lower() else (country or "")
                 lat, lon = None, None
 
                 # Check French prefix first
@@ -79,29 +82,48 @@ class PhoneInfoSource(Source):
                         lat, lon = geo_p["lat"], geo_p["lon"]
                         loc_name = geo_p["region"]
 
-                # If no regional prefix, geocode country or city via Nominatim
+                # If no regional prefix, check COUNTRY_COORDINATES then Nominatim
                 if lat is None and loc_name:
-                    try:
-                        r_nom = await client.get(
-                            "https://nominatim.openstreetmap.org/search",
-                            params={"q": loc_name, "format": "json", "limit": 1},
-                            headers={"User-Agent": "Eagle-OSINT-Framework/1.0"},
-                            timeout=4,
-                        )
-                        if r_nom.status_code == 200 and r_nom.json():
-                            g = r_nom.json()[0]
-                            lat, lon = float(g["lat"]), float(g["lon"])
-                    except Exception:
-                        pass
+                    from ..location import COUNTRY_COORDINATES
+                    loc_key = loc_name.lower().strip()
+                    country_key = country.lower().strip()
+                    if loc_key in COUNTRY_COORDINATES:
+                        c_info = COUNTRY_COORDINATES[loc_key]
+                        lat, lon = c_info["lat"], c_info["lon"]
+                    elif country_key in COUNTRY_COORDINATES:
+                        c_info = COUNTRY_COORDINATES[country_key]
+                        lat, lon = c_info["lat"], c_info["lon"]
+                    else:
+                        try:
+                            r_nom = await client.get(
+                                "https://nominatim.openstreetmap.org/search",
+                                params={"q": loc_name, "format": "json", "limit": 1},
+                                headers={"User-Agent": "Eagle-OSINT-Framework/1.0"},
+                                timeout=4,
+                            )
+                            if r_nom.status_code == 200 and r_nom.json():
+                                g = r_nom.json()[0]
+                                lat, lon = float(g["lat"]), float(g["lon"])
+                        except Exception:
+                            pass
 
                 if lat is not None and lon is not None:
+                    from ..location import COUNTRY_FLAGS
+                    country_str = country or loc_name or ""
+                    flag = COUNTRY_FLAGS.get(country_str.lower().strip(), "📍")
+                    display_loc = f"{flag} {loc_name}" if flag != "📍" else loc_name
+                    is_city = loc_name.lower().strip() != country_str.lower().strip()
                     result.findings.append(
                         Finding(
                             label="Localisation probable estimée",
                             value=f"{loc_name} ({lat}, {lon})",
                             url=f"https://www.google.com/maps/search/?q={lat},{lon}",
                             extra={
+                                "country": country or loc_name or "",
                                 "region": loc_name,
+                                "city": loc_name if is_city else "",
+                                "location": display_loc,
+                                "flag": flag,
                                 "latitude": lat,
                                 "longitude": lon,
                                 "source": "phonenumbers + geocoding",

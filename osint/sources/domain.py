@@ -68,9 +68,15 @@ class DomainInfoSource(Source):
                                     ip_data = r_ip.json()
                                     if ip_data.get("status") == "success":
                                         extra["ip"] = primary_ip
-                                        extra["city"] = ip_data.get("city")
-                                        extra["country"] = ip_data.get("country")
-                                        extra["location"] = f"{ip_data.get('city')}, {ip_data.get('country')}"
+                                        c_city = ip_data.get("city") or ""
+                                        c_country = ip_data.get("country") or ""
+                                        extra["city"] = c_city
+                                        extra["country"] = c_country
+                                        from ..location import COUNTRY_FLAGS
+                                        flag = COUNTRY_FLAGS.get(c_country.lower().strip(), "📍")
+                                        extra["flag"] = flag
+                                        disp_loc = f"{c_city}, {c_country}" if c_city and c_country else (c_city or c_country or "")
+                                        extra["location"] = f"{flag} {disp_loc}" if flag != "📍" and disp_loc else disp_loc
                                         extra["latitude"] = ip_data.get("lat")
                                         extra["longitude"] = ip_data.get("lon")
                                         extra["isp"] = ip_data.get("isp")

@@ -35,11 +35,11 @@ let otherSourceCards = new Map(); // sourceName -> cardEl
 // Flag dictionary for countries & common aliases
 const COUNTRY_FLAGS = {
   "france": "🇫🇷", "fr": "🇫🇷",
-  "algeria": "🇩🇿", "algérie": "🇩🇿", "dz": "🇩🇿",
+  "algeria": "🇩🇿", "algérie": "🇩🇿", "algerie": "🇩🇿", "dz": "🇩🇿",
   "morocco": "🇲🇦", "maroc": "🇲🇦", "ma": "🇲🇦",
   "tunisia": "🇹🇳", "tunisie": "🇹🇳", "tn": "🇹🇳",
-  "united states": "🇺🇸", "usa": "🇺🇸", "us": "🇺🇸", "états-unis": "🇺🇸",
-  "united kingdom": "🇬🇧", "uk": "🇬🇧", "gb": "🇬🇧", "royaume-uni": "🇬🇧",
+  "united states": "🇺🇸", "usa": "🇺🇸", "us": "🇺🇸", "états-unis": "🇺🇸", "etats-unis": "🇺🇸",
+  "united kingdom": "🇬🇧", "uk": "🇬🇧", "gb": "🇬🇧", "royaume-uni": "🇬🇧", "great britain": "🇬🇧", "angleterre": "🇬🇧",
   "belgium": "🇧🇪", "belgique": "🇧🇪", "be": "🇧🇪",
   "switzerland": "🇨🇭", "suisse": "🇨🇭", "ch": "🇨🇭",
   "germany": "🇩🇪", "allemagne": "🇩🇪", "de": "🇩🇪",
@@ -47,12 +47,73 @@ const COUNTRY_FLAGS = {
   "spain": "🇪🇸", "espagne": "🇪🇸", "es": "🇪🇸",
   "italy": "🇮🇹", "italie": "🇮🇹", "it": "🇮🇹",
   "japan": "🇯🇵", "japon": "🇯🇵", "jp": "🇯🇵",
-  "united arab emirates": "🇦🇪", "uae": "🇦🇪", "ae": "🇦🇪",
+  "united arab emirates": "🇦🇪", "uae": "🇦🇪", "ae": "🇦🇪", "émirats arabes unis": "🇦🇪", "emirats arabes unis": "🇦🇪",
   "russia": "🇷🇺", "russie": "🇷🇺", "ru": "🇷🇺",
+  "netherlands": "🇳🇱", "pays-bas": "🇳🇱", "nl": "🇳🇱",
+  "brazil": "🇧🇷", "brésil": "🇧🇷", "bresil": "🇧🇷", "br": "🇧🇷",
+  "portugal": "🇵🇹", "pt": "🇵🇹",
+  "senegal": "🇸🇳", "sénégal": "🇸🇳", "sn": "🇸🇳",
+  "turkey": "🇹🇷", "turquie": "🇹🇷", "tr": "🇹🇷",
+  "mexico": "🇲🇽", "mexique": "🇲🇽", "mx": "🇲🇽",
+  "australia": "🇦🇺", "australie": "🇦🇺", "au": "🇦🇺",
+  "india": "🇮🇳", "inde": "🇮🇳", "in": "🇮🇳",
+  "china": "🇨🇳", "chine": "🇨🇳", "cn": "🇨🇳",
+  "côte d'ivoire": "🇨🇮", "cote d'ivoire": "🇨🇮", "ivory coast": "🇨🇮", "ci": "🇨🇮",
+  "cameroon": "🇨🇲", "cameroun": "🇨🇲", "cm": "🇨🇲",
+  "egypt": "🇪🇬", "égypte": "🇪🇬", "egypte": "🇪🇬", "eg": "🇪🇬",
 };
+
+const CANONICAL_COUNTRIES = {
+  "france": "France", "fr": "France",
+  "algeria": "Algérie", "algérie": "Algérie", "algerie": "Algérie", "dz": "Algérie",
+  "morocco": "Maroc", "maroc": "Maroc", "ma": "Maroc",
+  "tunisia": "Tunisie", "tunisie": "Tunisie", "tn": "Tunisie",
+  "united states": "États-Unis", "usa": "États-Unis", "us": "États-Unis", "états-unis": "États-Unis", "etats-unis": "États-Unis",
+  "united kingdom": "Royaume-Uni", "uk": "Royaume-Uni", "gb": "Royaume-Uni", "royaume-uni": "Royaume-Uni", "angleterre": "Royaume-Uni",
+  "belgium": "Belgique", "belgique": "Belgique", "be": "Belgique",
+  "switzerland": "Suisse", "suisse": "Suisse", "ch": "Suisse",
+  "germany": "Allemagne", "allemagne": "Allemagne", "de": "Allemagne",
+  "canada": "Canada", "ca": "Canada",
+  "spain": "Espagne", "espagne": "Espagne", "es": "Espagne",
+  "italy": "Italie", "italie": "Italie", "it": "Italie",
+  "japan": "Japon", "japon": "Japon", "jp": "Japon",
+  "united arab emirates": "Émirats Arabes Unis", "uae": "Émirats Arabes Unis", "ae": "Émirats Arabes Unis", "émirats arabes unis": "Émirats Arabes Unis", "emirats arabes unis": "Émirats Arabes Unis",
+  "russia": "Russie", "russie": "Russie", "ru": "Russie",
+  "netherlands": "Pays-Bas", "pays-bas": "Pays-Bas", "nl": "Pays-Bas",
+  "brazil": "Brésil", "brésil": "Brésil", "bresil": "Brésil", "br": "Brésil",
+  "portugal": "Portugal", "pt": "Portugal",
+  "senegal": "Sénégal", "sénégal": "Sénégal", "sn": "Sénégal",
+  "turkey": "Turquie", "turquie": "Turquie", "tr": "Turquie",
+  "mexico": "Mexique", "mexique": "Mexique", "mx": "Mexique",
+  "australia": "Australie", "australie": "Australie", "au": "Australie",
+  "india": "Inde", "inde": "Inde", "in": "Inde",
+  "china": "Chine", "chine": "Chine", "cn": "Chine",
+  "côte d'ivoire": "Côte d'Ivoire", "cote d'ivoire": "Côte d'Ivoire", "ivory coast": "Côte d'Ivoire", "ci": "Côte d'Ivoire",
+  "cameroon": "Cameroun", "cameroun": "Cameroun", "cm": "Cameroun",
+  "egypt": "Égypte", "égypte": "Égypte", "egypte": "Égypte", "eg": "Égypte",
+};
+
+function detectCountry(str) {
+  if (!str) return null;
+  const lower = str.toLowerCase().trim();
+  for (const [key, canonical] of Object.entries(CANONICAL_COUNTRIES)) {
+    if (key.length <= 2) {
+      if (new RegExp(`(?:^|[^a-z0-9])${key}(?:$|[^a-z0-9])`, 'i').test(lower)) {
+        return { country: canonical, flag: COUNTRY_FLAGS[key] || "📍" };
+      }
+    } else {
+      if (lower.includes(key)) {
+        return { country: canonical, flag: COUNTRY_FLAGS[key] || "📍" };
+      }
+    }
+  }
+  return null;
+}
 
 function getCountryFlag(countryName) {
   if (!countryName) return "📍";
+  const detected = detectCountry(countryName);
+  if (detected) return detected.flag;
   const str = countryName.toLowerCase().trim();
   for (const [k, v] of Object.entries(COUNTRY_FLAGS)) {
     if (str === k || str.includes(k)) return v;
@@ -119,12 +180,45 @@ function addCoordinateToMap(source, label, value, lat, lon, extra = {}) {
     initMapIfNeeded();
   }
 
-  const city = extra.city || '';
-  const country = extra.country || '';
-  const flag = extra.flag || getCountryFlag(country || extra.location || '');
-  
-  const displayLocation = city ? (country ? `${city}, ${country}` : city) : (country || extra.location || 'Localisation détectée');
-  const locKey = city || country || coordKey;
+  let city = (extra.city || '').trim();
+  let country = (extra.country || '').trim();
+  let rawLoc = (extra.location || extra.region || '').trim();
+
+  // Strip generic placeholder phrases (e.g. "Localisation détectée", "location found")
+  if (/^(localisation|location\s+found|detected\s+location|probable|inconnu)/i.test(rawLoc)) {
+    rawLoc = '';
+  }
+
+  // Infer country if not explicitly provided
+  if (!country) {
+    const fromLoc = detectCountry(rawLoc) || detectCountry(value) || detectCountry(label);
+    if (fromLoc) {
+      country = fromLoc.country;
+    }
+  }
+
+  // If city is identical to country, clear city to avoid duplicate display
+  if (city && country && city.toLowerCase() === country.toLowerCase()) {
+    city = '';
+  }
+
+  const flag = extra.flag || (country ? getCountryFlag(country) : getCountryFlag(rawLoc));
+
+  // Determine display label: city + country, or city alone, or country alone (never generic placeholder)
+  let displayLocation = '';
+  if (city && country) {
+    displayLocation = `${city}, ${country}`;
+  } else if (city) {
+    displayLocation = city;
+  } else if (country) {
+    displayLocation = country;
+  } else if (rawLoc) {
+    displayLocation = rawLoc;
+  } else {
+    displayLocation = 'Position GPS';
+  }
+
+  const locKey = displayLocation || coordKey;
   
   if (!detectedLocations.has(locKey)) {
     detectedLocations.set(locKey, {
@@ -174,12 +268,14 @@ function addCoordinateToMap(source, label, value, lat, lon, extra = {}) {
 
 async function tryGeocode(locStr, source, label, value, extra) {
   if (!locStr || seenCoords.size > 15) return;
+  const cleanLoc = String(locStr).replace(/^(localisation|location\s+found|detected\s+location|probable|inconnu)/i, '').trim();
+  if (!cleanLoc || cleanLoc.length < 3) return;
   try {
-    const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(locStr)}&format=json&limit=1`);
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cleanLoc)}&format=json&limit=1`);
     if (r.ok) {
       const data = await r.json();
       if (data && data.length) {
-        addCoordinateToMap(source, label, value, data[0].lat, data[0].lon, { ...extra, location: locStr });
+        addCoordinateToMap(source, label, value, data[0].lat, data[0].lon, { ...extra, location: cleanLoc });
       }
     }
   } catch (_) {}
@@ -230,29 +326,116 @@ function detectSocialNetworkFromUrl(url) {
   return null;
 }
 
+// Extract handle from known social profile URLs
+function extractHandleFromSocialUrl(rawUrl) {
+  if (!rawUrl) return null;
+  try {
+    const u = new URL(rawUrl);
+    const path = u.pathname.replace(/^\/+|\/+$/g, '');
+    const parts = path.split('/').filter(Boolean);
+    const host = u.hostname.toLowerCase();
+    if (!parts.length) return null;
+
+    if (host.includes('instagram.com')) {
+      if (['p', 'reel', 'reels', 'stories', 'explore', 'accounts', 'about', 'legal', 'developer', 'popular', 'tags', 'direct', 'tv', 'channel'].includes(parts[0].toLowerCase())) return null;
+      return parts[0];
+    }
+    if (host.includes('twitter.com') || host.includes('x.com')) {
+      if (['i', 'intent', 'share', 'home', 'explore', 'notifications', 'messages', 'search'].includes(parts[0].toLowerCase())) return null;
+      return parts[0];
+    }
+    if (host.includes('linkedin.com')) {
+      if (parts[0].toLowerCase() === 'in' && parts[1]) return parts[1];
+      return null;
+    }
+    if (host.includes('reddit.com')) {
+      if (parts[0].toLowerCase() === 'user' && parts[1]) return parts[1];
+      return null;
+    }
+    if (host.includes('tiktok.com')) {
+      const m = path.match(/^@([a-zA-Z0-9._-]+)/);
+      return m ? m[1] : null;
+    }
+    if (host.includes('github.com')) {
+      if (['features', 'pricing', 'marketplace', 'topics', 'collections', 'trending', 'about', 'join', 'login', 'signup', 'settings'].includes(parts[0].toLowerCase())) return null;
+      return parts[0];
+    }
+    if (host.includes('t.me')) {
+      if (['s', 'joinchat', 'addstickers', 'share', 'invoice'].includes(parts[0].toLowerCase())) return null;
+      return parts[0];
+    }
+    if (host.includes('youtube.com')) {
+      const m = path.match(/^@([a-zA-Z0-9._-]+)/);
+      return m ? m[1] : null;
+    }
+    if (host.includes('medium.com')) {
+      const m = path.match(/^@([a-zA-Z0-9._-]+)/);
+      return m ? m[1] : null;
+    }
+    if (host.includes('pinterest.com')) {
+      if (['pin', 'ideas', 'today', 'search'].includes(parts[0].toLowerCase())) return null;
+      return parts[0];
+    }
+    if (host.includes('steamcommunity.com')) {
+      if (parts[0].toLowerCase() === 'id' && parts[1]) return parts[1];
+      return null;
+    }
+    if (host.includes('gitlab.com')) {
+      return parts[0];
+    }
+    if (host.includes('linktr.ee')) {
+      return parts[0];
+    }
+    if (host.includes('chess.com')) {
+      if (parts[0].toLowerCase() === 'member' && parts[1]) return parts[1];
+      return null;
+    }
+    if (host.includes('dev.to')) {
+      return parts[0];
+    }
+    return parts[0] || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Derive acceptable candidate handles from user target input
+function getCandidateHandles(target) {
+  if (!target) return [];
+  const clean = target.trim().toLowerCase();
+  const cands = new Set();
+  
+  cands.add(clean);
+  const slug = clean.replace(/[^a-z0-9]/g, '');
+  if (slug) cands.add(slug);
+  const dot = clean.replace(/\s+/g, '.').replace(/[^a-z0-9.]/g, '');
+  if (dot) cands.add(dot);
+  const underscore = clean.replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+  if (underscore) cands.add(underscore);
+  const hyphen = clean.replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+  if (hyphen) cands.add(hyphen);
+  
+  return Array.from(cands);
+}
+
 // Verify that a detected social URL genuinely corresponds to the searched target
 function isSocialUrlForTarget(url, target) {
   if (!url || !target) return false;
-  const cleanTarget = target.trim().toLowerCase();
-  const slug = cleanTarget.replace(/[^a-z0-9]/g, '');
-  const tokens = cleanTarget.replace(/[^a-z0-9]/g, ' ').split(/\s+/).filter(t => t.length > 1);
-  const urlLower = url.toLowerCase();
-  
-  // Non-profile paths to ignore
-  const ignoredPatterns = [
-    'instagram.com/p/', 'instagram.com/reels/', 'instagram.com/explore/', 'instagram.com/stories/', 'instagram.com/accounts/',
-    'twitter.com/i/', 'x.com/i/', 'twitter.com/intent/', 'x.com/intent/', 'twitter.com/share', 'x.com/share',
-    'linkedin.com/feed', 'linkedin.com/sharing', 'linkedin.com/pulse', 'linkedin.com/pub/dir',
-    'youtube.com/watch', 'youtube.com/channel/', 'youtube.com/playlist',
-    'pinterest.com/pin/', 'pinterest.com/ideas/',
-    'reddit.com/r/', 't.me/s/', 't.me/joinchat',
-  ];
-  for (const ign of ignoredPatterns) {
-    if (urlLower.includes(ign)) return false;
+  const handle = extractHandleFromSocialUrl(url);
+  if (!handle) return false;
+  const handleLower = handle.toLowerCase();
+  const candidates = getCandidateHandles(target);
+
+  // Direct candidate match (exact handle match)
+  if (candidates.includes(handleLower)) return true;
+
+  // LinkedIn suffix format: e.g. "alex-martin-123456"
+  if (url.toLowerCase().includes('linkedin.com/in/')) {
+    for (const c of candidates) {
+      if (handleLower.startsWith(c + '-')) return true;
+    }
   }
 
-  if (slug && urlLower.includes(slug)) return true;
-  if (tokens.length > 0 && tokens.every(t => urlLower.includes(t))) return true;
   return false;
 }
 
@@ -332,12 +515,25 @@ function addWebFinding(finding) {
   
   // Format location badge with country flag emoji
   let locBadgeHtml = '';
-  if (finding.extra && (finding.extra.location || finding.extra.city || finding.extra.country)) {
-    const city = finding.extra.city || '';
-    const country = finding.extra.country || '';
-    const flag = finding.extra.flag || getCountryFlag(country || finding.extra.location || '');
-    const text = city ? (country ? `${city}, ${country}` : city) : (country || finding.extra.location);
-    locBadgeHtml = `<span class="web-loc">${flag} ${escapeHtml(text)}</span>`;
+  if (finding.extra && (finding.extra.location || finding.extra.city || finding.extra.country || finding.extra.region)) {
+    let city = (finding.extra.city || '').trim();
+    let country = (finding.extra.country || '').trim();
+    let rawLoc = (finding.extra.location || finding.extra.region || '').trim();
+    if (/^(localisation|location\s+found|detected\s+location|probable|inconnu)/i.test(rawLoc)) {
+      rawLoc = '';
+    }
+    if (!country) {
+      const fromLoc = detectCountry(rawLoc) || detectCountry(finding.value) || detectCountry(finding.label);
+      if (fromLoc) country = fromLoc.country;
+    }
+    if (city && country && city.toLowerCase() === country.toLowerCase()) {
+      city = '';
+    }
+    const flag = finding.extra.flag || (country ? getCountryFlag(country) : getCountryFlag(rawLoc));
+    const text = city ? (country ? `${city}, ${country}` : city) : (country || rawLoc);
+    if (text) {
+      locBadgeHtml = `<span class="web-loc">${flag} ${escapeHtml(text)}</span>`;
+    }
   }
 
   const card = document.createElement('div');

@@ -62,19 +62,35 @@ class BssidSource(Source):
 
                         # Reverse geocoding via Nominatim
                         address = None
+                        nom_country = None
+                        nom_city = None
+                        flag = "📍"
                         try:
                             headers = {"User-Agent": "Eagle-OSINT-Framework/1.0"}
                             r_nom = await client.get(
                                 "https://nominatim.openstreetmap.org/reverse",
-                                params={"format": "json", "lat": str(lat), "lon": str(lon)},
+                                params={"format": "json", "lat": str(lat), "lon": str(lon), "addressdetails": 1},
                                 headers=headers,
                                 timeout=6,
                             )
                             if r_nom.status_code == 200:
                                 nom_data = r_nom.json()
                                 address = nom_data.get("display_name")
+                                addr_obj = nom_data.get("address", {})
+                                nom_country = addr_obj.get("country")
+                                nom_city = addr_obj.get("city") or addr_obj.get("town") or addr_obj.get("village") or addr_obj.get("municipality")
+                                from ..location import COUNTRY_FLAGS
+                                if nom_country:
+                                    flag = COUNTRY_FLAGS.get(nom_country.lower().strip(), "📍")
                         except Exception:
                             pass
+
+                        display_loc = (
+                            f"{nom_city}, {nom_country}" if nom_city and nom_country
+                            else (nom_country or nom_city or address or "")
+                        )
+                        if flag != "📍" and display_loc:
+                            display_loc = f"{flag} {display_loc}"
 
                         result.findings.append(
                             Finding(
@@ -84,6 +100,10 @@ class BssidSource(Source):
                                 extra={
                                     "latitude": lat,
                                     "longitude": lon,
+                                    "country": nom_country or "",
+                                    "city": nom_city or "",
+                                    "flag": flag,
+                                    "location": display_loc,
                                     "accuracy": f"{accuracy}m",
                                     "osm_url": osm_url,
                                 },

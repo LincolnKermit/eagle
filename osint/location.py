@@ -6,6 +6,7 @@ COUNTRY_FLAGS = {
     "france": "🇫🇷",
     "algeria": "🇩🇿",
     "algérie": "🇩🇿",
+    "algerie": "🇩🇿",
     "morocco": "🇲🇦",
     "maroc": "🇲🇦",
     "tunisia": "🇹🇳",
@@ -13,6 +14,7 @@ COUNTRY_FLAGS = {
     "united states": "🇺🇸",
     "usa": "🇺🇸",
     "états-unis": "🇺🇸",
+    "etats-unis": "🇺🇸",
     "united kingdom": "🇬🇧",
     "uk": "🇬🇧",
     "royaume-uni": "🇬🇧",
@@ -32,6 +34,33 @@ COUNTRY_FLAGS = {
     "united arab emirates": "🇦🇪",
     "uae": "🇦🇪",
     "émirats arabes unis": "🇦🇪",
+    "netherlands": "🇳🇱",
+    "pays-bas": "🇳🇱",
+    "brazil": "🇧🇷",
+    "brésil": "🇧🇷",
+    "portugal": "🇵🇹",
+    "senegal": "🇸🇳",
+    "sénégal": "🇸🇳",
+    "turkey": "🇹🇷",
+    "turquie": "🇹🇷",
+    "mexico": "🇲🇽",
+    "mexique": "🇲🇽",
+    "australia": "🇦🇺",
+    "australie": "🇦🇺",
+    "india": "🇮🇳",
+    "inde": "🇮🇳",
+    "china": "🇨🇳",
+    "chine": "🇨🇳",
+    "russia": "🇷🇺",
+    "russie": "🇷🇺",
+    "côte d'ivoire": "🇨🇮",
+    "cote d'ivoire": "🇨🇮",
+    "ivory coast": "🇨🇮",
+    "cameroon": "🇨🇲",
+    "cameroun": "🇨🇲",
+    "egypt": "🇪🇬",
+    "égypte": "🇪🇬",
+    "egypte": "🇪🇬",
 }
 
 # Pre-compiled database of common French & International cities with coordinates
@@ -102,8 +131,71 @@ LOCATION_PATTERNS = [
 ]
 
 
+# Pre-compiled database of country center coordinates and flags
+COUNTRY_COORDINATES = {
+    "france": {"country": "France", "flag": "🇫🇷", "lat": 46.603354, "lon": 1.888334},
+    "algeria": {"country": "Algérie", "flag": "🇩🇿", "lat": 28.033886, "lon": 1.659626},
+    "algérie": {"country": "Algérie", "flag": "🇩🇿", "lat": 28.033886, "lon": 1.659626},
+    "algerie": {"country": "Algérie", "flag": "🇩🇿", "lat": 28.033886, "lon": 1.659626},
+    "morocco": {"country": "Maroc", "flag": "🇲🇦", "lat": 31.791702, "lon": -7.09262},
+    "maroc": {"country": "Maroc", "flag": "🇲🇦", "lat": 31.791702, "lon": -7.09262},
+    "tunisia": {"country": "Tunisie", "flag": "🇹🇳", "lat": 33.886917, "lon": 9.537499},
+    "tunisie": {"country": "Tunisie", "flag": "🇹🇳", "lat": 33.886917, "lon": 9.537499},
+    "united states": {"country": "États-Unis", "flag": "🇺🇸", "lat": 37.09024, "lon": -95.712891},
+    "usa": {"country": "États-Unis", "flag": "🇺🇸", "lat": 37.09024, "lon": -95.712891},
+    "états-unis": {"country": "États-Unis", "flag": "🇺🇸", "lat": 37.09024, "lon": -95.712891},
+    "etats-unis": {"country": "États-Unis", "flag": "🇺🇸", "lat": 37.09024, "lon": -95.712891},
+    "united kingdom": {"country": "Royaume-Uni", "flag": "🇬🇧", "lat": 55.378051, "lon": -3.435973},
+    "uk": {"country": "Royaume-Uni", "flag": "🇬🇧", "lat": 55.378051, "lon": -3.435973},
+    "royaume-uni": {"country": "Royaume-Uni", "flag": "🇬🇧", "lat": 55.378051, "lon": -3.435973},
+    "belgium": {"country": "Belgique", "flag": "🇧🇪", "lat": 50.503887, "lon": 4.469936},
+    "belgique": {"country": "Belgique", "flag": "🇧🇪", "lat": 50.503887, "lon": 4.469936},
+    "switzerland": {"country": "Suisse", "flag": "🇨🇭", "lat": 46.818188, "lon": 8.227512},
+    "suisse": {"country": "Suisse", "flag": "🇨🇭", "lat": 46.818188, "lon": 8.227512},
+    "germany": {"country": "Allemagne", "flag": "🇩🇪", "lat": 51.165691, "lon": 10.451526},
+    "allemagne": {"country": "Allemagne", "flag": "🇩🇪", "lat": 51.165691, "lon": 10.451526},
+    "canada": {"country": "Canada", "flag": "🇨🇦", "lat": 56.130366, "lon": -106.346771},
+    "spain": {"country": "Espagne", "flag": "🇪🇸", "lat": 40.463667, "lon": -3.74922},
+    "espagne": {"country": "Espagne", "flag": "🇪🇸", "lat": 40.463667, "lon": -3.74922},
+    "italy": {"country": "Italie", "flag": "🇮🇹", "lat": 41.87194, "lon": 12.56738},
+    "italie": {"country": "Italie", "flag": "🇮🇹", "lat": 41.87194, "lon": 12.56738},
+    "japan": {"country": "Japon", "flag": "🇯🇵", "lat": 36.204824, "lon": 138.252924},
+    "japon": {"country": "Japon", "flag": "🇯🇵", "lat": 36.204824, "lon": 138.252924},
+    "united arab emirates": {"country": "Émirats Arabes Unis", "flag": "🇦🇪", "lat": 23.424076, "lon": 53.847818},
+    "uae": {"country": "Émirats Arabes Unis", "flag": "🇦🇪", "lat": 23.424076, "lon": 53.847818},
+    "émirats arabes unis": {"country": "Émirats Arabes Unis", "flag": "🇦🇪", "lat": 23.424076, "lon": 53.847818},
+    "netherlands": {"country": "Pays-Bas", "flag": "🇳🇱", "lat": 52.132633, "lon": 5.291266},
+    "pays-bas": {"country": "Pays-Bas", "flag": "🇳🇱", "lat": 52.132633, "lon": 5.291266},
+    "brazil": {"country": "Brésil", "flag": "🇧🇷", "lat": -14.235004, "lon": -51.92528},
+    "brésil": {"country": "Brésil", "flag": "🇧🇷", "lat": -14.235004, "lon": -51.92528},
+    "portugal": {"country": "Portugal", "flag": "🇵🇹", "lat": 39.399872, "lon": -8.224454},
+    "senegal": {"country": "Sénégal", "flag": "🇸🇳", "lat": 14.497401, "lon": -14.452362},
+    "sénégal": {"country": "Sénégal", "flag": "🇸🇳", "lat": 14.497401, "lon": -14.452362},
+    "turkey": {"country": "Turquie", "flag": "🇹🇷", "lat": 38.963745, "lon": 35.243322},
+    "turquie": {"country": "Turquie", "flag": "🇹🇷", "lat": 38.963745, "lon": 35.243322},
+    "mexico": {"country": "Mexique", "flag": "🇲🇽", "lat": 23.634501, "lon": -102.552784},
+    "mexique": {"country": "Mexique", "flag": "🇲🇽", "lat": 23.634501, "lon": -102.552784},
+    "australia": {"country": "Australie", "flag": "🇦🇺", "lat": -25.274398, "lon": 133.775136},
+    "australie": {"country": "Australie", "flag": "🇦🇺", "lat": -25.274398, "lon": 133.775136},
+    "india": {"country": "Inde", "flag": "🇮🇳", "lat": 20.593684, "lon": 78.96288},
+    "inde": {"country": "Inde", "flag": "🇮🇳", "lat": 20.593684, "lon": 78.96288},
+    "china": {"country": "Chine", "flag": "🇨🇳", "lat": 35.86166, "lon": 104.195397},
+    "chine": {"country": "Chine", "flag": "🇨🇳", "lat": 35.86166, "lon": 104.195397},
+    "russia": {"country": "Russie", "flag": "🇷🇺", "lat": 61.52401, "lon": 105.318756},
+    "russie": {"country": "Russie", "flag": "🇷🇺", "lat": 61.52401, "lon": 105.318756},
+    "côte d'ivoire": {"country": "Côte d'Ivoire", "flag": "🇨🇮", "lat": 7.539989, "lon": -5.54708},
+    "cote d'ivoire": {"country": "Côte d'Ivoire", "flag": "🇨🇮", "lat": 7.539989, "lon": -5.54708},
+    "ivory coast": {"country": "Côte d'Ivoire", "flag": "🇨🇮", "lat": 7.539989, "lon": -5.54708},
+    "cameroon": {"country": "Cameroun", "flag": "🇨🇲", "lat": 7.369722, "lon": 12.354722},
+    "cameroun": {"country": "Cameroun", "flag": "🇨🇲", "lat": 7.369722, "lon": 12.354722},
+    "egypt": {"country": "Égypte", "flag": "🇪🇬", "lat": 26.820553, "lon": 30.802498},
+    "égypte": {"country": "Égypte", "flag": "🇪🇬", "lat": 26.820553, "lon": 30.802498},
+    "egypte": {"country": "Égypte", "flag": "🇪🇬", "lat": 26.820553, "lon": 30.802498},
+}
+
+
 def detect_location_in_text(text: str) -> Optional[dict]:
-    """Scan text for explicit city names, hashtags or location patterns."""
+    """Scan text for explicit city names, hashtags, country names or location patterns."""
     if not text:
         return None
 
@@ -142,5 +234,32 @@ def detect_location_in_text(text: str) -> Optional[dict]:
                     "latitude": info["lat"],
                     "longitude": info["lon"],
                 }
+            elif candidate in COUNTRY_COORDINATES:
+                info = COUNTRY_COORDINATES[candidate]
+                flag = info.get("flag", "📍")
+                return {
+                    "city": "",
+                    "country": info["country"],
+                    "flag": flag,
+                    "location": f"{flag} {info['country']}",
+                    "latitude": info["lat"],
+                    "longitude": info["lon"],
+                }
+
+    # 3. Check direct matches for country names when no city is found
+    sorted_countries = sorted(COUNTRY_COORDINATES.keys(), key=len, reverse=True)
+    for c_key in sorted_countries:
+        pattern = rf"(?:\b|#){re.escape(c_key)}(?:\b|\s)"
+        if re.search(pattern, text_lower):
+            info = COUNTRY_COORDINATES[c_key]
+            flag = info.get("flag", "📍")
+            return {
+                "city": "",
+                "country": info["country"],
+                "flag": flag,
+                "location": f"{flag} {info['country']}",
+                "latitude": info["lat"],
+                "longitude": info["lon"],
+            }
 
     return None
