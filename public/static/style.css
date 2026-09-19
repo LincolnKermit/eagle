@@ -728,9 +728,9 @@ main {
   color: var(--accent-hover);
 }
 .tag-antibot {
-  background: rgba(245, 158, 11, 0.12);
-  border: 1px solid rgba(245, 158, 11, 0.28);
-  color: #f59e0b;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
 }
 
 /* Liens Divers / Anti-bot Grid & Cards */
@@ -738,21 +738,24 @@ main {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 12px;
+  padding: 16px;
 }
 .misc-card {
-  background: var(--bg-surface);
+  background: var(--surface-subtle);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--border-strong);
+  border-radius: 6px;
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   gap: 10px;
-  transition: border-color var(--transition), transform var(--transition);
+  transition: border-color 0.15s, background-color 0.15s;
 }
 .misc-card:hover {
-  border-color: rgba(245, 158, 11, 0.4);
-  transform: translateY(-1px);
+  border-color: var(--border-strong);
+  border-left-color: var(--accent);
+  background: var(--surface-hover);
 }
 .misc-card-head {
   display: flex;
@@ -766,7 +769,7 @@ main {
   gap: 8px;
   font-weight: 600;
   font-size: 13px;
-  color: #f1f5f9;
+  color: #ffffff;
 }
 .misc-card-desc {
   font-size: 12px;
@@ -782,24 +785,25 @@ main {
   gap: 6px;
   font-size: 11px;
   font-weight: 500;
-  font-family: var(--font-sans);
-  color: #38bdf8;
+  font-family: var(--font-mono);
+  color: var(--accent-hover);
   text-decoration: none;
   padding: 6px 12px;
-  background: rgba(56, 189, 248, 0.08);
-  border: 1px solid rgba(56, 189, 248, 0.2);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
   border-radius: 4px;
-  transition: all var(--transition);
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
   align-self: flex-start;
 }
 .misc-link-btn:hover {
-  background: rgba(56, 189, 248, 0.18);
-  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(59, 130, 246, 0.18);
+  border-color: var(--accent-hover);
   color: #ffffff;
+  text-decoration: none;
 }
 .misc-arrow {
   font-size: 12px;
-  transition: transform var(--transition);
+  transition: transform 0.15s;
 }
 .misc-link-btn:hover .misc-arrow {
   transform: translate(2px, -2px);

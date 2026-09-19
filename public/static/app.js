@@ -796,7 +796,7 @@ function addMiscFinding(finding) {
           <span class="misc-icon">🛡️</span>
           <span class="misc-name">${escapeHtml(title)}</span>
         </div>
-        <span class="tag-antibot">Anti-bot / WAF</span>
+        <span class="tag tag-antibot">Anti-bot</span>
       </div>
       <div class="misc-card-desc" style="margin-top: 6px;">
         ${escapeHtml(desc)}
