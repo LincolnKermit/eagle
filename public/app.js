@@ -1028,18 +1028,6 @@ form.addEventListener('submit', async (e) => {
       }
     }
 
-    // Also check if any search engine result discovered a social media profile
-    if (res.findings && res.findings.length) {
-      for (const f of res.findings) {
-        if (f.url) {
-          const detectedPlatform = detectSocialNetworkFromUrl(f.url);
-          if (detectedPlatform && isSocialUrlForTarget(f.url, target)) {
-            updateSocialPlatform(detectedPlatform, f.url, true);
-          }
-        }
-      }
-    }
-
     // 2. Global Unified Web Results (Google, DuckDuckGo, Yandex)
     if (['google', 'duckduckgo', 'yandex'].includes(res.source)) {
       if (res.findings && res.findings.length) {

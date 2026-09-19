@@ -20,14 +20,15 @@ class UsernameSitesSource(Source):
         clean = target.strip()
 
         # Derive candidate usernames and search tokens
-        tokens = [t for t in re.findall(r"[a-zA-Z0-9]+", clean.lower()) if len(t) > 1]
+        tokens = [t for t in re.findall(r"[a-zA-Z0-9]+", clean.lower()) if len(t) > 0]
         candidates = []
         if " " in clean:
             slug = re.sub(r"[^a-zA-Z0-9]", "", clean).lower()
+            hyphen = re.sub(r"\s+", "-", clean).lower()
             dot = re.sub(r"\s+", ".", clean).lower()
             underscore = re.sub(r"\s+", "_", clean).lower()
             pascal = "".join(w.capitalize() for w in clean.split())
-            for c in [slug, dot, underscore, pascal]:
+            for c in [slug, hyphen, dot, underscore, pascal]:
                 if c and c not in candidates:
                     candidates.append(c)
         else:
@@ -48,6 +49,11 @@ class UsernameSitesSource(Source):
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
             ),
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+        ig_headers = {
+            "User-Agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
         }
         yt_headers = dict(headers)
@@ -95,8 +101,15 @@ class UsernameSitesSource(Source):
                         pass
             return make_finding("GitHub", False, f"https://github.com/{primary_u}")
 
+        RESERVED_TWITTER = {
+            "about", "help", "settings", "home", "explore", "notifications",
+            "messages", "search", "tos", "privacy", "login", "signup", "i"
+        }
+
         async def check_twitter() -> Finding:
             for u in candidates:
+                if u.lower() in RESERVED_TWITTER:
+                    continue
                 api_url = f"https://publish.twitter.com/oembed?url=https://x.com/{u}"
                 async with sem:
                     try:
@@ -106,6 +119,94 @@ class UsernameSitesSource(Source):
                     except Exception:
                         pass
             return make_finding("Twitter/X", False, f"https://x.com/{primary_u}")
+
+        async def check_instagram() -> Finding:
+            for u in candidates:
+                url = f"https://www.instagram.com/{u}/"
+                async with sem:
+                    try:
+                        r = await client.get(url, headers=ig_headers, timeout=5, follow_redirects=True)
+                        if r.status_code == 200:
+                            title_m = re.search(r"<title>(.*?)</title>", r.text, re.IGNORECASE)
+                            if title_m:
+                                title_text = title_m.group(1).lower()
+                                if (
+                                    f"&#064;{u.lower()}" in title_text
+                                    or f"(@{u.lower()})" in title_text
+                                    or ("• instagram" in title_text and title_text.strip() != "instagram")
+                                ):
+                                    return make_finding("Instagram", True, url)
+                    except Exception:
+                        pass
+            return make_finding("Instagram", False, f"https://www.instagram.com/{primary_u}/")
+
+        async def check_linkedin() -> Finding:
+            # 1. Direct candidate check
+            for u in candidates:
+                url = f"https://www.linkedin.com/in/{u}"
+                async with sem:
+                    try:
+                        r = await client.get(url, headers=ig_headers, timeout=5, follow_redirects=True)
+                        if r.status_code == 200:
+                            title_m = re.search(r"<title>(.*?)</title>", r.text, re.IGNORECASE)
+                            if title_m:
+                                title_text = title_m.group(1).lower()
+                                if "| linkedin" in title_text and "not found" not in title_text and "page not found" not in title_text:
+                                    return make_finding("LinkedIn", True, url)
+                    except Exception:
+                        pass
+
+            # 2. For multi-word target (e.g. 'John Doe'), search assisted check for standard LinkedIn slug (e.g. 'john-doe-123456')
+            if len(tokens) >= 2:
+                hyphen_prefix = "-".join(tokens)
+                slug_pattern = re.compile(r"^" + re.escape(hyphen_prefix) + r"(-[0-9a-fA-F]+)+$")
+                try:
+                    def search_linkedin_ddg():
+                        from ddgs import DDGS
+                        with DDGS() as ddgs:
+                            hits = list(ddgs.text(f"site:linkedin.com/in/ {clean}", max_results=4))
+                            for h in hits:
+                                href = h.get("href", "")
+                                m = re.search(r"linkedin\.com/in/([a-zA-Z0-9._-]+)", href)
+                                if m:
+                                    u_found = m.group(1).lower().rstrip("/")
+                                    if u_found in ["dir", "pub", "feed", "jobs", "company", "school", "learning", "pulse"]:
+                                        continue
+                                    if slug_pattern.match(u_found):
+                                        return u_found
+                        return None
+
+                    discovered = await asyncio.to_thread(search_linkedin_ddg)
+                    if discovered:
+                        async with sem:
+                            r = await client.get(f"https://www.linkedin.com/in/{discovered}", headers=ig_headers, timeout=5, follow_redirects=True)
+                            if r.status_code == 200:
+                                title_m = re.search(r"<title>(.*?)</title>", r.text, re.IGNORECASE)
+                                title_text = title_m.group(1).lower() if title_m else ""
+                                if "| linkedin" in title_text and "not found" not in title_text:
+                                    return make_finding("LinkedIn", True, f"https://www.linkedin.com/in/{discovered}")
+                except Exception:
+                    pass
+
+            return make_finding("LinkedIn", False, f"https://www.linkedin.com/in/{primary_u}")
+
+        async def check_reddit() -> Finding:
+            for u in candidates:
+                url = f"https://www.reddit.com/user/{u}/"
+                async with sem:
+                    try:
+                        r = await client.get(url, headers=ig_headers, timeout=5, follow_redirects=True)
+                        if r.status_code == 200:
+                            title_m = re.search(r"<title>(.*?)</title>", r.text, re.IGNORECASE)
+                            if title_m:
+                                title_text = title_m.group(1).lower()
+                                if f"(u/{u.lower()})" in title_text or (
+                                    title_text.endswith("- reddit") and "heart of the internet" not in title_text
+                                ):
+                                    return make_finding("Reddit", True, url)
+                    except Exception:
+                        pass
+            return make_finding("Reddit", False, f"https://www.reddit.com/user/{primary_u}")
 
         async def check_telegram() -> Finding:
             for u in candidates:
@@ -204,7 +305,7 @@ class UsernameSitesSource(Source):
                         r = await client.get(url, headers=headers, timeout=5, follow_redirects=True)
                         if (
                             r.status_code == 200
-                            and "g_rgProfileData =" in r.text
+                            and ("actual_persona_name" in r.text or "g_rgProfileData =" in r.text)
                             and "The specified profile could not be found" not in r.text
                         ):
                             return make_finding("Steam", True, url)
@@ -218,8 +319,14 @@ class UsernameSitesSource(Source):
                 async with sem:
                     try:
                         r = await client.get(url, headers=headers, timeout=5, follow_redirects=True)
-                        if r.status_code == 200 and "SoundCloud - Hear the world’s sounds" not in r.text and "404" not in r.text:
-                            return make_finding("SoundCloud", True, url)
+                        if r.status_code == 200:
+                            soup = BeautifulSoup(r.text, "html.parser")
+                            title_text = soup.title.string if soup.title else ""
+                            if (
+                                "SoundCloud - Hear the world’s sounds" not in title_text
+                                and ("Stream " in title_text or "music | Listen" in title_text or "tracks, albums" in r.text)
+                            ):
+                                return make_finding("SoundCloud", True, url)
                     except Exception:
                         pass
             return make_finding("SoundCloud", False, f"https://soundcloud.com/{primary_u}")
@@ -290,8 +397,11 @@ class UsernameSitesSource(Source):
                 async with sem:
                     try:
                         r = await client.get(url, headers=headers, timeout=5, follow_redirects=True)
-                        if r.status_code == 200 and "doesn't exist" not in r.text:
-                            return make_finding("Dribbble", True, url)
+                        if r.status_code == 200:
+                            soup = BeautifulSoup(r.text, "html.parser")
+                            title_text = soup.title.string if soup.title else ""
+                            if "doesn't exist" not in r.text and "| Dribbble" in title_text:
+                                return make_finding("Dribbble", True, url)
                     except Exception:
                         pass
             return make_finding("Dribbble", False, f"https://dribbble.com/{primary_u}")
@@ -313,111 +423,13 @@ class UsernameSitesSource(Source):
                         pass
             return make_finding("Behance", False, f"https://www.behance.net/{primary_u}")
 
-        # -------------------------------------------------------------
-        # SEARCH-ASSISTED CHECKERS (Instagram, LinkedIn, Reddit)
-        # -------------------------------------------------------------
-
-        def check_search_assisted_sync() -> list[Finding]:
-            findings = []
-            found_map = {}
-            try:
-                from ddgs import DDGS
-                with DDGS() as ddgs:
-                    # 1. Instagram
-                    try:
-                        for q in [f"site:instagram.com {clean}", f"{clean} instagram"]:
-                            try:
-                                hits = list(ddgs.text(q, max_results=5))
-                                for h in hits:
-                                    href = h.get("href", "")
-                                    m = re.search(r"instagram\.com/([a-zA-Z0-9._-]+)", href)
-                                    if m:
-                                        u_found = m.group(1).lower().rstrip("/")
-                                        if u_found in ["p", "reel", "reels", "stories", "explore", "accounts", "about", "legal", "developer", "popular", "tags", "direct", "tv", "channel"]:
-                                            continue
-                                        if u_found in cand_lower:
-                                            found_map["Instagram"] = f"https://www.instagram.com/{u_found}/"
-                                            break
-                                if "Instagram" in found_map:
-                                    break
-                            except Exception:
-                                continue
-                    except Exception:
-                        pass
-
-                    # 2. LinkedIn
-                    try:
-                        for q in [f"site:linkedin.com/in/ {clean}", f"{clean} linkedin in"]:
-                            try:
-                                hits = list(ddgs.text(q, max_results=5))
-                                for h in hits:
-                                    href = h.get("href", "")
-                                    m = re.search(r"linkedin\.com/in/([a-zA-Z0-9._-]+)", href)
-                                    if m:
-                                        u_found = m.group(1).lower().rstrip("/")
-                                        if u_found in ["dir", "pub", "feed", "jobs", "company", "school", "learning", "pulse"]:
-                                            continue
-                                        if u_found in cand_lower or any(u_found.startswith(f"{c}-") for c in cand_lower):
-                                            found_map["LinkedIn"] = f"https://www.linkedin.com/in/{u_found}/"
-                                            break
-                                if "LinkedIn" in found_map:
-                                    break
-                            except Exception:
-                                continue
-                    except Exception:
-                        pass
-
-                    # 3. Reddit
-                    try:
-                        for q in [f"site:reddit.com/user/ {clean}", f"{clean} reddit user"]:
-                            try:
-                                hits = list(ddgs.text(q, max_results=4))
-                                for h in hits:
-                                    href = h.get("href", "")
-                                    m = re.search(r"reddit\.com/user/([a-zA-Z0-9._-]+)", href)
-                                    if m:
-                                        u_found = m.group(1).lower().rstrip("/")
-                                        if u_found in ["r", "subreddits", "coins", "premium"]:
-                                            continue
-                                        if u_found in cand_lower:
-                                            found_map["Reddit"] = f"https://www.reddit.com/user/{u_found}/"
-                                            break
-                                if "Reddit" in found_map:
-                                    break
-                            except Exception:
-                                continue
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-
-            findings.append(
-                make_finding(
-                    "Instagram",
-                    "Instagram" in found_map,
-                    found_map.get("Instagram", f"https://www.instagram.com/{primary_u}/"),
-                )
-            )
-            findings.append(
-                make_finding(
-                    "LinkedIn",
-                    "LinkedIn" in found_map,
-                    found_map.get("LinkedIn", f"https://www.linkedin.com/in/{primary_u}"),
-                )
-            )
-            findings.append(
-                make_finding(
-                    "Reddit",
-                    "Reddit" in found_map,
-                    found_map.get("Reddit", f"https://www.reddit.com/user/{primary_u}"),
-                )
-            )
-            return findings
-
-        # Launch all async tasks and threadpool task concurrently
+        # Launch all async tasks concurrently
         async_tasks = [
             check_github(),
             check_twitter(),
+            check_instagram(),
+            check_linkedin(),
+            check_reddit(),
             check_telegram(),
             check_tiktok(),
             check_pinterest(),
@@ -436,19 +448,11 @@ class UsernameSitesSource(Source):
             check_behance(),
         ]
 
-        async_res, search_res = await asyncio.gather(
-            asyncio.gather(*async_tasks, return_exceptions=True),
-            asyncio.to_thread(check_search_assisted_sync),
-        )
+        async_res = await asyncio.gather(*async_tasks, return_exceptions=True)
 
         for f in async_res:
             if isinstance(f, Finding):
                 result.findings.append(f)
-
-        if isinstance(search_res, list):
-            for f in search_res:
-                if isinstance(f, Finding):
-                    result.findings.append(f)
 
         result.found = any(f.extra.get("exists") for f in result.findings)
         result.elapsed_ms = int((time.monotonic() - start) * 1000)
