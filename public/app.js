@@ -24,8 +24,16 @@ const otherSections = document.getElementById('other-sections');
 let currentEs = null;
 let leafletMap = null;
 let mapMarkers = [];
+let mapPolygons = [];
+let worldGeoJson = null;
 let seenCoords = new Set();
-let detectedLocations = new Map(); // key -> { city, country, flag, text }
+let detectedLocations = new Map(); // key -> { city, country, flag, label }
+
+// Preload world GeoJSON for instant country-level highlight
+fetch('/static/countries.geo.json')
+  .then(r => r.json())
+  .then(data => { worldGeoJson = data; })
+  .catch(() => {});
 
 // State for Social Media & Web Deduplication
 let socialMap = new Map(); // platformName -> { name, url, exists, checked }
@@ -155,9 +163,70 @@ function initMapIfNeeded() {
   setTimeout(() => leafletMap.invalidateSize(), 250);
 }
 
+const ISO_MAP = {
+  "fr": "FRA", "fra": "FRA", "france": "FRA",
+  "dz": "DZA", "dza": "DZA", "algérie": "DZA", "algerie": "DZA", "algeria": "DZA",
+  "ma": "MAR", "mar": "MAR", "maroc": "MAR", "morocco": "MAR",
+  "tn": "TUN", "tun": "TUN", "tunisie": "TUN", "tunisia": "TUN",
+  "be": "BEL", "bel": "BEL", "belgique": "BEL", "belgium": "BEL",
+  "ch": "CHE", "che": "CHE", "suisse": "CHE", "switzerland": "CHE",
+  "de": "DEU", "deu": "DEU", "allemagne": "DEU", "germany": "DEU",
+  "gb": "GBR", "gbr": "GBR", "uk": "GBR", "royaume-uni": "GBR", "united kingdom": "GBR", "angleterre": "GBR",
+  "us": "USA", "usa": "USA", "états-unis": "USA", "etats-unis": "USA", "united states": "USA",
+  "ca": "CAN", "can": "CAN", "canada": "CAN",
+  "es": "ESP", "esp": "ESP", "espagne": "ESP", "spain": "ESP",
+  "it": "ITA", "ita": "ITA", "italie": "ITA", "italy": "ITA",
+  "pt": "PRT", "prt": "PRT", "portugal": "PRT",
+  "nl": "NLD", "nld": "NLD", "pays-bas": "NLD", "netherlands": "NLD",
+  "ru": "RUS", "rus": "RUS", "russie": "RUS", "russia": "RUS",
+  "cn": "CHN", "chn": "CHN", "chine": "CHN", "china": "CHN",
+  "jp": "JPN", "jpn": "JPN", "japon": "JPN", "japan": "JPN",
+  "br": "BRA", "bra": "BRA", "brésil": "BRA", "bresil": "BRA", "brazil": "BRA",
+  "mx": "MEX", "mex": "MEX", "mexique": "MEX", "mexico": "MEX",
+  "in": "IND", "ind": "IND", "inde": "IND", "india": "IND",
+  "sn": "SEN", "sen": "SEN", "sénégal": "SEN", "senegal": "SEN",
+  "ci": "CIV", "civ": "CIV", "côte d'ivoire": "CIV", "cote d'ivoire": "CIV", "ivory coast": "CIV",
+  "cm": "CMR", "cmr": "CMR", "cameroun": "CMR", "cameroon": "CMR",
+  "mg": "MDG", "mdg": "MDG", "madagascar": "MDG",
+  "cd": "COD", "cod": "COD", "rdc": "COD", "congo": "COG",
+  "au": "AUS", "aus": "AUS", "australie": "AUS", "australia": "AUS",
+  "pl": "POL", "pol": "POL", "pologne": "POL", "poland": "POL",
+  "se": "SWE", "swe": "SWE", "suède": "SWE", "suede": "SWE", "sweden": "SWE",
+  "no": "NOR", "nor": "NOR", "norvège": "NOR", "norvege": "NOR", "norway": "NOR",
+  "fi": "FIN", "fin": "FIN", "finlande": "FIN", "finland": "FIN",
+  "dk": "DNK", "dnk": "DNK", "danemark": "DNK", "denmark": "DNK",
+  "ie": "IRL", "irl": "IRL", "irlande": "IRL", "ireland": "IRL",
+  "gr": "GRC", "grc": "GRC", "grèce": "GRC", "grece": "GRC", "greece": "GRC",
+  "tr": "TUR", "tur": "TUR", "turquie": "TUR", "turkey": "TUR",
+  "ua": "UKR", "ukr": "UKR", "ukraine": "UKR",
+  "eg": "EGY", "egy": "EGY", "égypte": "EGY", "egypte": "EGY", "egypt": "EGY",
+  "za": "ZAF", "zaf": "ZAF", "afrique du sud": "ZAF", "south africa": "ZAF",
+  "ae": "ARE", "are": "ARE", "émirats": "ARE", "emirats": "ARE", "uae": "ARE",
+  "sa": "SAU", "sau": "SAU", "arabie saoudite": "SAU", "saudi arabia": "SAU",
+  "il": "ISR", "isr": "ISR", "israël": "ISR", "israel": "ISR",
+  "ar": "ARG", "arg": "ARG", "argentine": "ARG", "argentina": "ARG",
+  "cl": "CHL", "chl": "CHL", "chili": "CHL", "chile": "CHL",
+  "co": "COL", "col": "COL", "colombie": "COL", "colombia": "COL",
+};
+
+function findCountryFeature(countryName) {
+  if (!countryName || !worldGeoJson || !worldGeoJson.features) return null;
+  const clean = countryName.toLowerCase().trim().replace(/^(the|la|le|les|l'|el)\s+/i, "");
+  const iso = ISO_MAP[clean] || ISO_MAP[clean.replace(/[^a-z0-9]/g, "")];
+  if (iso) {
+    const feat = worldGeoJson.features.find(x => x.id === iso);
+    if (feat) return feat;
+  }
+  return worldGeoJson.features.find(x => {
+    const n = (x.properties && x.properties.name) ? x.properties.name.toLowerCase() : "";
+    return n === clean || (clean.length > 3 && n.includes(clean)) || (clean.length > 3 && clean.includes(n));
+  }) || null;
+}
+
 function updateMapHeader() {
   if (!detectedLocations.size) {
-    mapCount.textContent = `${mapMarkers.length} localisation${mapMarkers.length > 1 ? 's' : ''}`;
+    const count = mapMarkers.length + mapPolygons.length;
+    mapCount.textContent = `${count} localisation${count > 1 ? 's' : ''}`;
     return;
   }
   const pills = Array.from(detectedLocations.values())
@@ -166,7 +235,132 @@ function updateMapHeader() {
   mapCount.innerHTML = pills;
 }
 
-function addCoordinateToMap(source, label, value, lat, lon, extra = {}) {
+async function highlightCountryOnMap(countryName, flag, label, value) {
+  if (!worldGeoJson) {
+    try {
+      const r = await fetch('/static/countries.geo.json');
+      worldGeoJson = await r.json();
+    } catch (_) {}
+  }
+  const feature = findCountryFeature(countryName);
+  if (!feature) return false;
+
+  if (mapSection.classList.contains('hidden')) {
+    mapSection.classList.remove('hidden');
+    initMapIfNeeded();
+  }
+
+  const geoLayer = L.geoJSON(feature, {
+    style: {
+      fillColor: '#3b82f6',
+      fillOpacity: 0.28,
+      color: '#60a5fa',
+      weight: 2,
+      opacity: 0.95,
+      dashArray: '4, 4',
+    }
+  }).addTo(leafletMap);
+
+  const popupContent = `
+    <div style="font-family: var(--font-sans, sans-serif); color: #f4f4f6; padding: 2px;">
+      <div class="map-popup-header">
+        <span style="font-size: 16px;">${flag || '📍'}</span>
+        <span>${escapeHtml(countryName)} (Couverture nationale)</span>
+      </div>
+      <div style="color: #ffffff; font-weight: 600; font-size: 12px; margin-bottom: 4px;">
+        ${escapeHtml(label || 'Zone nationale')}
+      </div>
+      ${value ? `<div style="color: #94a3b8; font-size: 11px; line-height: 1.4; margin-bottom: 6px;">${escapeHtml(value)}</div>` : ''}
+    </div>
+  `;
+  geoLayer.bindPopup(popupContent);
+  mapPolygons.push(geoLayer);
+
+  const bounds = geoLayer.getBounds();
+  leafletMap.fitBounds(bounds.pad(0.08));
+  setTimeout(() => {
+    if (leafletMap) {
+      leafletMap.invalidateSize();
+      leafletMap.fitBounds(bounds.pad(0.08));
+    }
+  }, 120);
+
+  detectedLocations.set(`country:${countryName.toLowerCase()}`, {
+    city: '',
+    country: countryName,
+    flag: flag || getCountryFlag(countryName),
+    label: countryName,
+  });
+  updateMapHeader();
+
+  return true;
+}
+
+function addCityMarkerToMap(city, country, flag, latNum, lonNum, label, value) {
+  if (mapSection.classList.contains('hidden')) {
+    mapSection.classList.remove('hidden');
+    initMapIfNeeded();
+  }
+
+  const displayLoc = country ? `${city}, ${country}` : city;
+
+  // City radius highlight zone
+  const cityCircle = L.circle([latNum, lonNum], {
+    radius: 12000,
+    fillColor: '#3b82f6',
+    fillOpacity: 0.18,
+    color: '#60a5fa',
+    weight: 1.5,
+    opacity: 0.85,
+  }).addTo(leafletMap);
+  mapPolygons.push(cityCircle);
+
+  // Center point on the city
+  const popupHtml = `
+    <div style="font-family: var(--font-sans, sans-serif); color: #f4f4f6; padding: 2px;">
+      <div class="map-popup-header">
+        <span style="font-size: 16px;">${flag || '📍'}</span>
+        <span>${escapeHtml(displayLoc)}</span>
+      </div>
+      <div style="color: #ffffff; font-weight: 600; font-size: 12px; margin-bottom: 4px;">
+        ${escapeHtml(label || 'Zone urbaine')}
+      </div>
+      ${value ? `<div style="color: #94a3b8; font-size: 11px; line-height: 1.4; max-height: 70px; overflow-y: auto; margin-bottom: 6px;">${escapeHtml(value)}</div>` : ''}
+      <div style="color: #64748b; font-size: 10px; font-family: monospace; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 5px;">
+        GPS: ${latNum.toFixed(4)}, ${lonNum.toFixed(4)}
+      </div>
+    </div>
+  `;
+
+  const marker = L.circleMarker([latNum, lonNum], {
+    radius: 7,
+    fillColor: '#3b82f6',
+    color: '#ffffff',
+    weight: 2,
+    opacity: 1,
+    fillOpacity: 0.95,
+  }).addTo(leafletMap).bindPopup(popupHtml);
+  mapMarkers.push(marker);
+
+  const bounds = cityCircle.getBounds();
+  leafletMap.fitBounds(bounds.pad(0.3));
+  setTimeout(() => {
+    if (leafletMap) {
+      leafletMap.invalidateSize();
+      leafletMap.fitBounds(bounds.pad(0.3));
+    }
+  }, 120);
+
+  detectedLocations.set(`city:${city.toLowerCase()}`, {
+    city,
+    country,
+    flag: flag || getCountryFlag(country || city),
+    label: displayLoc,
+  });
+  updateMapHeader();
+}
+
+async function addCoordinateToMap(source, label, value, lat, lon, extra = {}) {
   const latNum = parseFloat(lat);
   const lonNum = parseFloat(lon);
   if (isNaN(latNum) || isNaN(lonNum)) return;
@@ -174,11 +368,6 @@ function addCoordinateToMap(source, label, value, lat, lon, extra = {}) {
   const coordKey = `${latNum.toFixed(4)},${lonNum.toFixed(4)}`;
   if (seenCoords.has(coordKey)) return;
   seenCoords.add(coordKey);
-
-  if (mapSection.classList.contains('hidden')) {
-    mapSection.classList.remove('hidden');
-    initMapIfNeeded();
-  }
 
   let city = (extra.city || '').trim();
   let country = (extra.country || '').trim();
@@ -203,32 +392,38 @@ function addCoordinateToMap(source, label, value, lat, lon, extra = {}) {
   }
 
   const flag = extra.flag || (country ? getCountryFlag(country) : getCountryFlag(rawLoc));
+  const isCountryLevel = Boolean(extra.is_country_level || (!city && country && (/^(mobile|national|voip)/i.test(extra.region || '') || String(label).includes('Pays / Région'))));
 
-  // Determine display label: city + country, or city alone, or country alone (never generic placeholder)
-  let displayLocation = '';
-  if (city && country) {
-    displayLocation = `${city}, ${country}`;
-  } else if (city) {
-    displayLocation = city;
-  } else if (country) {
-    displayLocation = country;
-  } else if (rawLoc) {
-    displayLocation = rawLoc;
-  } else {
-    displayLocation = 'Position GPS';
+  // If country-level (e.g. phone number with country only), highlight entire country polygon globally, NO center pin!
+  if (isCountryLevel && country) {
+    const highlighted = await highlightCountryOnMap(country, flag, label, value);
+    if (highlighted) {
+      return;
+    }
   }
 
+  // If city is known, highlight city with area circle and marker
+  if (city) {
+    addCityMarkerToMap(city, country, flag, latNum, lonNum, label, value);
+    return;
+  }
+
+  // Generic coordinate pin fallback
+  if (mapSection.classList.contains('hidden')) {
+    mapSection.classList.remove('hidden');
+    initMapIfNeeded();
+  }
+
+  let displayLocation = country || rawLoc || 'Position GPS';
   const locKey = displayLocation || coordKey;
-  
   if (!detectedLocations.has(locKey)) {
     detectedLocations.set(locKey, {
-      city,
+      city: '',
       country,
       flag,
       label: displayLocation,
     });
   }
-
   updateMapHeader();
 
   const popupHtml = `
@@ -258,11 +453,12 @@ function addCoordinateToMap(source, label, value, lat, lon, extra = {}) {
 
   mapMarkers.push(marker);
 
-  if (mapMarkers.length === 1) {
+  if (mapMarkers.length === 1 && !mapPolygons.length) {
     leafletMap.setView([latNum, lonNum], 11);
   } else {
-    const group = L.featureGroup(mapMarkers);
-    leafletMap.fitBounds(group.getBounds().pad(0.3));
+    const allLayers = [...mapMarkers, ...mapPolygons];
+    const group = L.featureGroup(allLayers);
+    leafletMap.fitBounds(group.getBounds().pad(0.2));
   }
 }
 
@@ -462,7 +658,6 @@ function renderSocialTile(name, url, exists) {
 
 function updateSocialPlatform(name, url, exists) {
   if (!name) return;
-  socialSection.classList.remove('hidden');
 
   const existing = socialMap.get(name);
   if (existing && existing.exists && !exists) {
@@ -490,6 +685,13 @@ function updateSocialPlatform(name, url, exists) {
   }
   socialFoundCount.textContent = `${foundCount} profil${foundCount > 1 ? 's' : ''} détecté${foundCount > 1 ? 's' : ''}`;
   socialTotalCount.textContent = `${socialMap.size} testé${socialMap.size > 1 ? 's' : ''}`;
+
+  // If no profiles are found, do not display the social media category!
+  if (foundCount > 0) {
+    socialSection.classList.remove('hidden');
+  } else {
+    socialSection.classList.add('hidden');
+  }
 }
 
 // -------------------------------------------------------------
@@ -604,38 +806,39 @@ function getOrCreateDomainCard(sourceName) {
 }
 
 function fillDomainCard(res) {
+  // If result is empty or errored with no findings, DO NOT display the category!
+  if (!res.found || !res.findings || !res.findings.length) {
+    const existing = otherSourceCards.get(res.source);
+    if (existing) {
+      existing.remove();
+      otherSourceCards.delete(res.source);
+    }
+    return;
+  }
+
   const card = getOrCreateDomainCard(res.source);
   const meta = card.querySelector('.domain-card-meta');
   const body = card.querySelector('.domain-card-body');
 
-  let tag;
-  if (res.error) tag = '<span class="tag tag-error">erreur</span>';
-  else if (res.found && res.findings.length) tag = `<span class="tag tag-found">${res.findings.length} hit${res.findings.length === 1 ? '' : 's'}</span>`;
-  else tag = '<span class="tag tag-empty">vide</span>';
+  let tag = `<span class="tag tag-found">${res.findings.length} hit${res.findings.length === 1 ? '' : 's'}</span>`;
   meta.innerHTML = `${tag}<span style="font-family: monospace; font-size: 10px; color: var(--text-dim);">${res.elapsed_ms}ms</span>`;
 
-  if (res.error) {
-    body.innerHTML = `<div class="error-msg">${escapeHtml(res.error)}</div>`;
-  } else if (!res.findings || !res.findings.length) {
-    body.innerHTML = `<div class="empty-msg">Aucune information trouvée</div>`;
-  } else {
-    body.innerHTML = res.findings.map(f => {
-      const url = f.url ? `<div class="finding-item-url"><a href="${escapeAttr(f.url)}" target="_blank" rel="noopener">${escapeHtml(f.url)}</a></div>` : '';
-      const extraRows = Object.entries(f.extra || {})
-        .filter(([k, v]) => v != null && v !== '' && !['latitude', 'longitude', 'exists', 'category', 'checked'].includes(k))
-        .map(([k, v]) => `<div style="font-family: monospace; font-size: 10px; color: var(--text-dim); margin-top: 2px;"><span style="color: var(--text-muted);">${escapeHtml(k)}:</span> ${escapeHtml(String(v))}</div>`)
-        .join('');
+  body.innerHTML = res.findings.map(f => {
+    const url = f.url ? `<div class="finding-item-url"><a href="${escapeAttr(f.url)}" target="_blank" rel="noopener">${escapeHtml(f.url)}</a></div>` : '';
+    const extraRows = Object.entries(f.extra || {})
+      .filter(([k, v]) => v != null && v !== '' && !['latitude', 'longitude', 'exists', 'category', 'checked', 'is_country_level'].includes(k))
+      .map(([k, v]) => `<div style="font-family: monospace; font-size: 10px; color: var(--text-dim); margin-top: 2px;"><span style="color: var(--text-muted);">${escapeHtml(k)}:</span> ${escapeHtml(String(v))}</div>`)
+      .join('');
 
-      return `
-        <div class="finding-item">
-          <div class="finding-item-label">${escapeHtml(f.label || '')}</div>
-          ${f.value ? `<div class="finding-item-value">${escapeHtml(f.value)}</div>` : ''}
-          ${url}
-          ${extraRows}
-        </div>
-      `;
-    }).join('');
-  }
+    return `
+      <div class="finding-item">
+        <div class="finding-item-label">${escapeHtml(f.label || '')}</div>
+        ${f.value ? `<div class="finding-item-value">${escapeHtml(f.value)}</div>` : ''}
+        ${url}
+        ${extraRows}
+      </div>
+    `;
+  }).join('');
 }
 
 // -------------------------------------------------------------
@@ -659,6 +862,8 @@ form.addEventListener('submit', async (e) => {
 
   mapMarkers.forEach(m => m.remove());
   mapMarkers = [];
+  mapPolygons.forEach(p => p.remove());
+  mapPolygons = [];
   seenCoords.clear();
   detectedLocations.clear();
   socialMap.clear();
@@ -784,6 +989,22 @@ form.addEventListener('submit', async (e) => {
     es.close();
     currentEs = null;
     if (leafletMap) setTimeout(() => leafletMap.invalidateSize(), 300);
+
+    // If all categories are empty, show a single clean empty notice
+    const hasMap = !mapSection.classList.contains('hidden');
+    const hasSocial = !socialSection.classList.contains('hidden');
+    const hasWeb = !webSection.classList.contains('hidden');
+    const hasOther = otherSections.children.length > 0;
+
+    if (!hasMap && !hasSocial && !hasWeb && !hasOther) {
+      webSection.classList.remove('hidden');
+      webCount.textContent = '0 résultat';
+      webGrid.innerHTML = `
+        <div class="empty-msg" style="padding: 24px; text-align: center; color: var(--text-muted); grid-column: 1 / -1;">
+          Aucune information ni mention trouvée pour cette cible.
+        </div>
+      `;
+    }
   });
 
   es.onerror = () => {

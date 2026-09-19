@@ -6,14 +6,14 @@ import httpx
 from .base import Finding, Result, Source
 
 FRENCH_PREFIX_GEO = {
-    "01": {"region": "Île-de-France (Paris)", "lat": 48.8566, "lon": 2.3522},
-    "02": {"region": "Nord-Ouest (Bretagne, Normandie, Pays de la Loire)", "lat": 48.1173, "lon": -1.6778},
-    "03": {"region": "Nord-Est (Grand Est, Hauts-de-France, Bourgogne)", "lat": 48.5734, "lon": 7.7521},
-    "04": {"region": "Sud-Est (Auvergne-Rhône-Alpes, PACA, Corse)", "lat": 45.7640, "lon": 4.8357},
-    "05": {"region": "Sud-Ouest (Nouvelle-Aquitaine, Occitanie)", "lat": 43.6047, "lon": 1.4442},
-    "06": {"region": "Mobile France (National)", "lat": 46.6033, "lon": 1.8883},
-    "07": {"region": "Mobile France (National)", "lat": 46.6033, "lon": 1.8883},
-    "09": {"region": "VoIP / Ligne IP France", "lat": 46.6033, "lon": 1.8883},
+    "01": {"region": "Île-de-France", "city": "Paris", "lat": 48.8566, "lon": 2.3522, "country_level": False},
+    "02": {"region": "Nord-Ouest", "city": "Rennes", "lat": 48.1173, "lon": -1.6778, "country_level": False},
+    "03": {"region": "Nord-Est", "city": "Strasbourg", "lat": 48.5734, "lon": 7.7521, "country_level": False},
+    "04": {"region": "Sud-Est", "city": "Lyon", "lat": 45.7640, "lon": 4.8357, "country_level": False},
+    "05": {"region": "Sud-Ouest", "city": "Toulouse", "lat": 43.6047, "lon": 1.4442, "country_level": False},
+    "06": {"region": "France", "city": "", "lat": 46.6033, "lon": 1.8883, "country_level": True},
+    "07": {"region": "France", "city": "", "lat": 46.6033, "lon": 1.8883, "country_level": True},
+    "09": {"region": "France", "city": "", "lat": 46.6033, "lon": 1.8883, "country_level": True},
 }
 
 
@@ -70,7 +70,9 @@ class PhoneInfoSource(Source):
                 result.findings.append(Finding(label="Format E.164", value=fmt_e164))
 
                 # Estimate probable location coordinates for map
-                loc_name = region if region and region.lower() != country.lower() else (country or "")
+                city = ""
+                is_country_level = True
+                loc_name = country or ""
                 lat, lon = None, None
 
                 # Check French prefix first
@@ -80,24 +82,39 @@ class PhoneInfoSource(Source):
                     if prefix in FRENCH_PREFIX_GEO:
                         geo_p = FRENCH_PREFIX_GEO[prefix]
                         lat, lon = geo_p["lat"], geo_p["lon"]
-                        loc_name = geo_p["region"]
+                        city = geo_p.get("city", "")
+                        is_country_level = geo_p.get("country_level", False)
+                        loc_name = f"{city}, {country}" if city and country else (city or country or geo_p["region"])
+                elif region and region.lower() != country.lower() and not any(k in region.lower() for k in ["mobile", "national", "cellular"]):
+                    city = region
+                    is_country_level = False
+                    loc_name = f"{city}, {country}" if country else city
+                else:
+                    is_country_level = True
+                    loc_name = country
 
-                # If no regional prefix, check COUNTRY_COORDINATES then Nominatim
+                # If no regional prefix, check CITY_COORDINATES, then COUNTRY_COORDINATES, then Nominatim
                 if lat is None and loc_name:
-                    from ..location import COUNTRY_COORDINATES
+                    from ..location import CITY_COORDINATES, COUNTRY_COORDINATES
+                    city_key = city.lower().strip() if city else ""
                     loc_key = loc_name.lower().strip()
-                    country_key = country.lower().strip()
-                    if loc_key in COUNTRY_COORDINATES:
-                        c_info = COUNTRY_COORDINATES[loc_key]
+                    country_key = country.lower().strip() if country else ""
+
+                    if city_key and city_key in CITY_COORDINATES:
+                        c_info = CITY_COORDINATES[city_key]
                         lat, lon = c_info["lat"], c_info["lon"]
-                    elif country_key in COUNTRY_COORDINATES:
+                    elif is_country_level and country_key in COUNTRY_COORDINATES:
                         c_info = COUNTRY_COORDINATES[country_key]
+                        lat, lon = c_info["lat"], c_info["lon"]
+                    elif loc_key in COUNTRY_COORDINATES:
+                        c_info = COUNTRY_COORDINATES[loc_key]
                         lat, lon = c_info["lat"], c_info["lon"]
                     else:
                         try:
+                            query_term = city if (city and not is_country_level) else (country or loc_name)
                             r_nom = await client.get(
                                 "https://nominatim.openstreetmap.org/search",
-                                params={"q": loc_name, "format": "json", "limit": 1},
+                                params={"q": query_term, "format": "json", "limit": 1},
                                 headers={"User-Agent": "Eagle-OSINT-Framework/1.0"},
                                 timeout=4,
                             )
@@ -111,17 +128,19 @@ class PhoneInfoSource(Source):
                     from ..location import COUNTRY_FLAGS
                     country_str = country or loc_name or ""
                     flag = COUNTRY_FLAGS.get(country_str.lower().strip(), "📍")
-                    display_loc = f"{flag} {loc_name}" if flag != "📍" else loc_name
-                    is_city = loc_name.lower().strip() != country_str.lower().strip()
+                    display_loc = f"{flag} {city}, {country}" if city and country else (f"{flag} {loc_name}" if flag != "📍" else loc_name)
+                    finding_val = f"{city}, {country}" if city and country else (f"{country} (Zone nationale)" if is_country_level else loc_name)
+
                     result.findings.append(
                         Finding(
                             label="Localisation probable estimée",
-                            value=f"{loc_name} ({lat}, {lon})",
+                            value=finding_val,
                             url=f"https://www.google.com/maps/search/?q={lat},{lon}",
                             extra={
-                                "country": country or loc_name or "",
+                                "country": country or "France",
                                 "region": loc_name,
-                                "city": loc_name if is_city else "",
+                                "city": city,
+                                "is_country_level": is_country_level,
                                 "location": display_loc,
                                 "flag": flag,
                                 "latitude": lat,

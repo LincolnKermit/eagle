@@ -511,6 +511,7 @@ main {
 
 /* Found profile -> Green checkmark */
 .social-tile.found {
+  order: -1;
   border-color: rgba(16, 185, 129, 0.3);
   background: rgba(16, 185, 129, 0.04);
   cursor: pointer;
