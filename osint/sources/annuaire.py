@@ -103,39 +103,96 @@ class AnnuaireSource(Source):
                     )
 
             # If automated scraping is blocked by anti-bot/WAF (standard for 118 712 / PagesJaunes)
-            # or no items were parsed, provide structured query access and zone intel
+            # or no items were parsed, provide structured direct query links for "Liens divers"
             if not result.findings:
-                extra = {
-                    "source": "118712.fr",
+                extra_118 = {
+                    "antibot": True,
+                    "service": "118 712",
+                    "domain": "118712.fr",
+                    "reason": "Protection anti-bot / Cloudflare active",
                     "type_recherche": "Inversée (téléphone)" if french_local else "Nom / Particulier",
                 }
                 if geo_info:
-                    extra["zone_geographique"] = geo_info["region"]
-                    extra["latitude"] = geo_info["lat"]
-                    extra["longitude"] = geo_info["lon"]
+                    extra_118["zone_geographique"] = geo_info["region"]
 
                 result.findings.append(
                     Finding(
-                        label="Annuaire 118 712 (Portail France)",
+                        label="118 712 (Annuaire & Recherche Inversée)",
                         value=(
-                            f"Lien de recherche directe sur l'annuaire 118 712"
+                            f"Recherche directe sur l'annuaire 118 712 pour « {clean} »"
                             + (f" [Zone estimée : {geo_info['region']}]" if geo_info else "")
+                            + " — Protection anti-bot Cloudflare active"
                         ),
                         url=search_url,
-                        extra=extra,
+                        extra=extra_118,
                     )
                 )
 
-                # Also add PagesBlanches / PagesJaunes reference link
+                # PagesBlanches / PagesJaunes reference link
                 pages_url = f"https://www.pagesjaunes.fr/pagesblanches/recherche?quoiqui={quote(clean)}"
                 result.findings.append(
                     Finding(
-                        label="PagesBlanches (Alternative France)",
-                        value=f"Recherche annuaire particuliers sur PagesBlanches : {clean}",
+                        label="PagesBlanches (PagesJaunes France)",
+                        value=f"Recherche annuaire des particuliers sur PagesBlanches pour « {clean} » — Accès direct navigateur",
                         url=pages_url,
-                        extra={"notice": "Protection Cloudflare/WAF active sur les annuaires FR — accès direct navigateur recommandé"},
+                        extra={
+                            "antibot": True,
+                            "service": "PagesBlanches",
+                            "domain": "pagesjaunes.fr",
+                            "reason": "Protection anti-bot / WAF",
+                        },
                     )
                 )
+
+                # Infobel reference link
+                infobel_url = f"https://www.infobel.com/fr/france?q={quote(clean)}"
+                result.findings.append(
+                    Finding(
+                        label="Infobel (Annuaire France & International)",
+                        value=f"Recherche de particuliers et professionnels sur Infobel pour « {clean} »",
+                        url=infobel_url,
+                        extra={
+                            "antibot": True,
+                            "service": "Infobel",
+                            "domain": "infobel.com",
+                            "reason": "Protection anti-bot",
+                        },
+                    )
+                )
+
+                # Annuaire Inversé for phone numbers
+                if french_local or digits:
+                    num_query = french_local or clean
+                    ai_url = f"https://www.annuaire-inverse-france.com/recherche?numero={quote(num_query)}"
+                    result.findings.append(
+                        Finding(
+                            label="Annuaire Inversé France",
+                            value=f"Recherche de propriétaire et signalements de spam pour « {num_query} »",
+                            url=ai_url,
+                            extra={
+                                "antibot": True,
+                                "service": "Annuaire Inversé France",
+                                "domain": "annuaire-inverse-france.com",
+                                "reason": "Protection anti-bot",
+                            },
+                        )
+                    )
+                else:
+                    # Copains d'avant for persons / usernames
+                    copains_url = f"https://copainsdavant.linternaute.com/s?q={quote(clean)}"
+                    result.findings.append(
+                        Finding(
+                            label="Copains d'avant (Réseau d'Anciens)",
+                            value=f"Recherche d'anciens contacts et camarades scolaires pour « {clean} »",
+                            url=copains_url,
+                            extra={
+                                "antibot": True,
+                                "service": "Copains d'avant",
+                                "domain": "linternaute.com",
+                                "reason": "Protection anti-bot / Connexion requise",
+                            },
+                        )
+                    )
 
             result.found = bool(result.findings)
         except Exception as e:

@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/style.css?v=0.4" />
 </head>
 <body>
   <header class="topbar">
@@ -23,50 +23,65 @@
     </div>
   </header>
 
-  <main>
+  <main class="container">
     <section class="hero">
-      <div class="hero-tag">Passive Reconnaissance & Intelligence Engine</div>
-      <h1>Investiguer une cible.</h1>
-      <p class="sub">Personne · Pseudo · Email · Téléphone · Domaine · BSSID — cartographie géospatiale et multi-sources unifiées.</p>
-
-      <form id="search-form" class="search">
-        <select id="type" aria-label="Type de recherche">
-          <option value="auto">AUTO</option>
-          <option value="person">PERSONNE</option>
-          <option value="username">USERNAME</option>
-          <option value="email">EMAIL</option>
-          <option value="phone">TÉLÉPHONE</option>
-          <option value="domain">DOMAINE</option>
-          <option value="bssid">BSSID</option>
-        </select>
-        <input id="target" type="text" placeholder="Entrez un nom, email, pseudo, téléphone..." autocomplete="off" autofocus spellcheck="false" />
-        <button type="submit">
-          <span>Scanner</span>
-          <span class="arrow">→</span>
-        </button>
-      </form>
-
-      <div class="hint">
-        <span>Exemples :</span>
-        <span class="ex" data-v="John Doe">John Doe</span>
-        <span class="sep">·</span>
-        <span class="ex" data-v="elon musk">elon musk</span>
-        <span class="sep">·</span>
-        <span class="ex" data-v="someone@example.com">someone@example.com</span>
-        <span class="sep">·</span>
-        <span class="ex" data-v="+33142685500">+33142685500</span>
-        <span class="sep">·</span>
-        <span class="ex" data-v="github.com">github.com</span>
-      </div>
+      <div class="hero-badge">RECONNAISSANCE PASSIVE MULTI-VECTEURS</div>
+      <h1 class="hero-title">Plateforme d'Investigation OSINT</h1>
+      <p class="hero-sub">
+        Analyse automatisée de numéros de téléphone, pseudonymes, adresses email, noms d'hôtes et adresses MAC BSSID.
+      </p>
     </section>
 
-    <!-- Scan progress information -->
+    <!-- Formulaire de recherche -->
+    <form id="search-form" class="search-form">
+      <div class="search-bar">
+        <div class="search-input-wrap">
+          <span class="search-icon">🔍</span>
+          <input
+            type="text"
+            id="target"
+            name="target"
+            placeholder="Entrez un numéro (+33...), pseudo, email, domaine ou MAC..."
+            autocomplete="off"
+            autofocus
+            required
+          />
+        </div>
+        <div class="search-type-wrap">
+          <select id="type" name="type" class="type-select">
+            <option value="auto">Détection auto</option>
+            <option value="phone">Téléphone</option>
+            <option value="username">Pseudonyme</option>
+            <option value="email">Email</option>
+            <option value="domain">Domaine / IP</option>
+            <option value="bssid">BSSID (Wi-Fi)</option>
+            <option value="person">Nom / Personne</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary" id="search-btn">
+          <span>LANCER LE SCAN</span>
+          <span class="btn-arrow">→</span>
+        </button>
+      </div>
+
+      <div class="hints">
+        <span class="hint-label">Exemples :</span>
+        <span class="hint"><button type="button" class="ex" data-v="+33142685500">+33 1 42 68 55 00</button></span>
+        <span class="hint"><button type="button" class="ex" data-v="elonmusk">elonmusk</button></span>
+        <span class="hint"><button type="button" class="ex" data-v="github.com">github.com</button></span>
+        <span class="hint"><button type="button" class="ex" data-v="00:14:22:01:23:45">00:14:22:01:23:45</button></span>
+      </div>
+    </form>
+
+    <!-- Statut d'exécution & progression -->
     <section id="run-info" class="run-info hidden">
-      <div class="run-meta">
-        <div class="meta-item"><span class="k">CIBLE</span> <span id="run-target" class="v"></span></div>
-        <div class="meta-item"><span class="k">TYPE</span> <span id="run-type" class="v"></span></div>
-        <div class="meta-item"><span class="k">MODULES</span> <span id="run-count" class="v"></span></div>
-        <div class="meta-item"><span class="k">STATUT</span> <span id="run-done" class="v">Analyse en cours...</span></div>
+      <div class="run-info-head">
+        <div class="run-meta">
+          <span class="run-pill"><span class="pill-k">CIBLE</span> <span class="pill-v" id="run-target">-</span></span>
+          <span class="run-pill"><span class="pill-k">TYPE</span> <span class="pill-v" id="run-type">-</span></span>
+          <span class="run-pill"><span class="pill-k">MODULES</span> <span class="pill-v" id="run-count">0</span></span>
+          <span class="run-pill"><span class="pill-k">TERMINÉS</span> <span class="pill-v" id="run-done">0</span></span>
+        </div>
       </div>
       <div class="progress"><div class="progress-bar" id="progress-bar"></div></div>
     </section>
@@ -120,6 +135,25 @@
 
     <!-- 4. Renseignement Spécifique par Domaine (Annuaires, Téléphonie, Domaines, Fuites, Archives) -->
     <section id="other-sections" class="other-sections"></section>
+
+    <!-- 5. Liens Divers & Accès Direct (Sites avec anti-bot tels que 118712, PagesBlanches, etc.) -->
+    <section id="misc-section" class="intel-section hidden">
+      <div class="section-head">
+        <div class="section-title">
+          <span class="section-icon">◈</span>
+          <span>LIENS DIVERS & ACCÈS DIRECT</span>
+        </div>
+        <div class="section-meta">
+          <span id="misc-count" class="badge badge-accent">0 lien</span>
+        </div>
+      </div>
+      <div class="section-desc" style="font-size: 11px; color: var(--text-dim); margin-top: -6px; margin-bottom: 12px;">
+        Services protégés par anti-bot / Cloudflare ne pouvant être capturés automatiquement — Accès direct navigateur :
+      </div>
+      <div id="misc-grid" class="misc-grid">
+        <!-- Injected anti-bot / direct manual query cards -->
+      </div>
+    </section>
   </main>
 
   <footer>
@@ -127,6 +161,6 @@
   </footer>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=0.4"></script>
 </body>
 </html>

@@ -20,6 +20,9 @@ const webSection = document.getElementById('web-section');
 const webGrid = document.getElementById('web-grid');
 const webCount = document.getElementById('web-count');
 const otherSections = document.getElementById('other-sections');
+const miscSection = document.getElementById('misc-section');
+const miscGrid = document.getElementById('misc-grid');
+const miscCount = document.getElementById('misc-count');
 
 let currentEs = null;
 let leafletMap = null;
@@ -35,9 +38,10 @@ fetch('/static/countries.geo.json')
   .then(data => { worldGeoJson = data; })
   .catch(() => {});
 
-// State for Social Media & Web Deduplication
+// State for Social Media, Web Deduplication & Misc Links
 let socialMap = new Map(); // platformName -> { name, url, exists, checked }
 let seenWebUrls = new Map(); // normalizedUrl -> { el, finding }
+let seenMiscUrls = new Set(); // normalizedUrl
 let otherSourceCards = new Map(); // sourceName -> cardEl
 
 // Flag dictionary for countries & common aliases
@@ -761,6 +765,57 @@ function addWebFinding(finding) {
 }
 
 // -------------------------------------------------------------
+// LIENS DIVERS & ACCÈS DIRECT (Anti-bot / Cloudflare sites)
+// -------------------------------------------------------------
+function addMiscFinding(finding) {
+  if (!finding || !finding.url) return;
+  if (miscSection.classList.contains('hidden')) {
+    miscSection.classList.remove('hidden');
+  }
+
+  const norm = normalizeUrl(finding.url);
+  if (norm && seenMiscUrls.has(norm)) return;
+  if (norm) seenMiscUrls.add(norm);
+
+  const title = finding.label || (finding.extra && finding.extra.service) || 'Service externe';
+  const desc = finding.value || 'Site protégé par un système anti-bot / Cloudflare. Consultation directe disponible.';
+  const url = finding.url;
+  let domain = (finding.extra && finding.extra.domain) || '';
+  if (!domain && url) {
+    try {
+      domain = new URL(url).hostname.replace(/^www\./, '');
+    } catch (_) {}
+  }
+
+  const card = document.createElement('div');
+  card.className = 'misc-card';
+  card.innerHTML = `
+    <div>
+      <div class="misc-card-head">
+        <div class="misc-card-title">
+          <span class="misc-icon">🛡️</span>
+          <span class="misc-name">${escapeHtml(title)}</span>
+        </div>
+        <span class="tag-antibot">Anti-bot / WAF</span>
+      </div>
+      <div class="misc-card-desc" style="margin-top: 6px;">
+        ${escapeHtml(desc)}
+      </div>
+    </div>
+    <div class="misc-card-foot">
+      <a href="${escapeAttr(url)}" target="_blank" rel="noopener" class="misc-link-btn">
+        <span>Consulter sur ${escapeHtml(domain || title)}</span>
+        <span class="misc-arrow">↗</span>
+      </a>
+    </div>
+  `;
+
+  miscGrid.appendChild(card);
+  const count = seenMiscUrls.size;
+  miscCount.textContent = `${count} lien${count > 1 ? 's' : ''}`;
+}
+
+// -------------------------------------------------------------
 // DOMAIN-SPECIFIC CARDS (Phone, Domain, BSSID, Directory, etc.)
 // -------------------------------------------------------------
 const DOMAIN_CATEGORY_CONFIG = {
@@ -816,17 +871,28 @@ function fillDomainCard(res) {
     return;
   }
 
+  // Filter out any findings that are marked as antibot (they belong in "Liens divers")
+  const realFindings = res.findings.filter(f => !f.extra || !f.extra.antibot);
+  if (!realFindings.length) {
+    const existing = otherSourceCards.get(res.source);
+    if (existing) {
+      existing.remove();
+      otherSourceCards.delete(res.source);
+    }
+    return;
+  }
+
   const card = getOrCreateDomainCard(res.source);
   const meta = card.querySelector('.domain-card-meta');
   const body = card.querySelector('.domain-card-body');
 
-  let tag = `<span class="tag tag-found">${res.findings.length} hit${res.findings.length === 1 ? '' : 's'}</span>`;
+  let tag = `<span class="tag tag-found">${realFindings.length} hit${realFindings.length === 1 ? '' : 's'}</span>`;
   meta.innerHTML = `${tag}<span style="font-family: monospace; font-size: 10px; color: var(--text-dim);">${res.elapsed_ms}ms</span>`;
 
-  body.innerHTML = res.findings.map(f => {
+  body.innerHTML = realFindings.map(f => {
     const url = f.url ? `<div class="finding-item-url"><a href="${escapeAttr(f.url)}" target="_blank" rel="noopener">${escapeHtml(f.url)}</a></div>` : '';
     const extraRows = Object.entries(f.extra || {})
-      .filter(([k, v]) => v != null && v !== '' && !['latitude', 'longitude', 'exists', 'category', 'checked', 'is_country_level'].includes(k))
+      .filter(([k, v]) => v != null && v !== '' && !['latitude', 'longitude', 'exists', 'category', 'checked', 'is_country_level', 'antibot'].includes(k))
       .map(([k, v]) => `<div style="font-family: monospace; font-size: 10px; color: var(--text-dim); margin-top: 2px;"><span style="color: var(--text-muted);">${escapeHtml(k)}:</span> ${escapeHtml(String(v))}</div>`)
       .join('');
 
@@ -855,10 +921,12 @@ form.addEventListener('submit', async (e) => {
   mapSection.classList.add('hidden');
   socialSection.classList.add('hidden');
   webSection.classList.add('hidden');
+  miscSection.classList.add('hidden');
 
   socialGrid.innerHTML = '';
   webGrid.innerHTML = '';
   otherSections.innerHTML = '';
+  miscGrid.innerHTML = '';
 
   mapMarkers.forEach(m => m.remove());
   mapMarkers = [];
@@ -868,12 +936,14 @@ form.addEventListener('submit', async (e) => {
   detectedLocations.clear();
   socialMap.clear();
   seenWebUrls.clear();
+  seenMiscUrls.clear();
   otherSourceCards.clear();
 
   mapCount.textContent = '0 localisation';
   socialFoundCount.textContent = '0 profil détecté';
   socialTotalCount.textContent = '0 testé';
   webCount.textContent = '0 résultat unique';
+  miscCount.textContent = '0 lien';
 
   const body = { target };
   if (typeSel.value !== 'auto') body.type = typeSel.value;
@@ -920,6 +990,23 @@ form.addEventListener('submit', async (e) => {
   es.addEventListener('result', (ev) => {
     const res = JSON.parse(ev.data);
     
+    // 0. Anti-bot findings -> Route directly to "Liens divers"
+    if (res.findings && res.findings.length) {
+      for (const f of res.findings) {
+        if (f.extra && f.extra.antibot) {
+          addMiscFinding(f);
+        }
+      }
+    }
+    if (res.error && /antibot|cloudflare|captcha|challenge|datadome|403/i.test(res.error)) {
+      addMiscFinding({
+        label: res.source.toUpperCase(),
+        value: `Le service « ${res.source} » est protégé par un système anti-bot / Cloudflare bloquant la capture automatisée (${res.error}).`,
+        url: res.findings?.[0]?.url || '',
+        extra: { antibot: true, service: res.source, reason: res.error },
+      });
+    }
+
     // 1. Social Media Processing
     if (res.source === 'username_sites') {
       if (res.findings && res.findings.length) {
@@ -957,7 +1044,9 @@ form.addEventListener('submit', async (e) => {
     if (['google', 'duckduckgo', 'yandex'].includes(res.source)) {
       if (res.findings && res.findings.length) {
         for (const f of res.findings) {
-          addWebFinding(f);
+          if (!f.extra || !f.extra.antibot) {
+            addWebFinding(f);
+          }
         }
       }
     } else if (!['username_sites', 'github', 'holehe'].includes(res.source)) {
@@ -968,6 +1057,9 @@ form.addEventListener('submit', async (e) => {
     // 4. Geolocation coordinates & Map
     if (res.findings && res.findings.length) {
       for (const f of res.findings) {
+        // Do not plot GPS coordinates from anti-bot fallback links
+        if (f.extra && f.extra.antibot) continue;
+
         if (f.extra && f.extra.latitude != null && f.extra.longitude != null) {
           addCoordinateToMap(res.source, f.label, f.value, f.extra.latitude, f.extra.longitude, f.extra);
         } else if (f.extra && (f.extra.city || f.extra.location || f.extra.adresse)) {
@@ -995,8 +1087,9 @@ form.addEventListener('submit', async (e) => {
     const hasSocial = !socialSection.classList.contains('hidden');
     const hasWeb = !webSection.classList.contains('hidden');
     const hasOther = otherSections.children.length > 0;
+    const hasMisc = !miscSection.classList.contains('hidden');
 
-    if (!hasMap && !hasSocial && !hasWeb && !hasOther) {
+    if (!hasMap && !hasSocial && !hasWeb && !hasOther && !hasMisc) {
       webSection.classList.remove('hidden');
       webCount.textContent = '0 résultat';
       webGrid.innerHTML = `
